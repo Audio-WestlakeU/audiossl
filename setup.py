@@ -8,5 +8,6 @@ setup(
     version='0.1',
     description='',
     author='lixian',
+    email='lixian@westlake.edu.cn',
     packages=packages,
 )
