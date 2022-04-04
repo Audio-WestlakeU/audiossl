@@ -1,5 +1,5 @@
 
-from assl.transforms.common import Normalize,MinMax,RandomCrop,Identity
+from audiossl.transforms.common import Normalize,MinMax,RandomCrop,Identity
 from torchvision import transforms
 import torchaudio
 import random
@@ -21,7 +21,6 @@ class ATSTTrainTransform:
         self.anchor_len = anchor_len
         self.positive_len = positive_len
         self.max_positive_len = max(self.positive_len + self.anchor_len)
-        self.mask_ratio = mask_ratio
 
         self.mel_feature = transforms.Compose(
                                 [melspec_t,
@@ -51,7 +50,6 @@ class ATSTTrainTransform:
     def __call__(self,input):
         crops = []
         lengths = []
-        masks = []
 
         anchor_len = random.uniform(self.anchor_len[0],self.anchor_len[1])
 
