@@ -32,13 +32,13 @@ def create_spcv2(data_path,split,transform,target_transform):
         split = "eval"
     return LMDBDataset(data_path,split=split,transform=transform) 
 
-@register_dataset("audioset_b",multi_label=False,num_labels=527,num_folds=1)
+@register_dataset("audioset_b",multi_label=True,num_labels=527,num_folds=1)
 def create_spcv2(data_path,split,transform,target_transform):
     if split == "test":
         split = "eval"
     return LMDBDataset(data_path,split=split,transform=transform) 
 
-@register_dataset("audioset",multi_label=False,num_labels=527,num_folds=1)
+@register_dataset("audioset",multi_label=True,num_labels=527,num_folds=1)
 def create_spcv2(data_path,split,transform,target_transform):
     if split == "test":
         split = "eval"

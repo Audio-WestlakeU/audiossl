@@ -4,10 +4,17 @@ from audiossl.datasets import Nsynth,Urbansound8k,SpeakerClassifiDataset,IEMOCAP
 from pathlib import Path
 import os
 import torch
+import sys
+import time
+import datetime
+
+
+
+
 
 def load_dataset(dataset_name,data_path,fold,transform):
     if dataset_name == "spcv2":
-        dataset_train = datasets.LMDBDataset(data_path,split="train",subset=1000,transform=transform) 
+        dataset_train = datasets.LMDBDataset(data_path,split="train",subset=200000,transform=transform) 
         dataset_val = datasets.LMDBDataset(data_path,split="valid",subset=200000,transform=transform) 
         dataset_test = datasets.LMDBDataset(data_path,split="eval",subset=200000,transform=transform) 
     elif dataset_name == "nsynth":
@@ -53,98 +60,16 @@ def load_dataset(dataset_name,data_path,fold,transform):
         raise NotImplementedError
     return dataset_train,dataset_val,dataset_test
 
-def extract_embedding(model, loader, n, use_cls, avgpool, args,load_args):
-    header = 'extracting embedding:'
-    X = []
-    Y = []
-    features = None
-    i=0
-    max_global_len=load_args.global_len[1] if "global_len" in load_args else 6
-    for ((inp, length), target) in loader:
-        i+=1
-        # move to gpu
-        inp = inp.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
-        length = length.cuda(non_blocking=True)
-        patch_length = (inp.shape[2]//model.patch_h) * ((length - length%model.patch_w)//model.patch_w)
 
-        if args.dataset_name == "spcv2":
-            target = torch.argmax(target,dim=-1)
-
-        # forward
-        with torch.no_grad():
-            output=[]
-            if load_args.arch.startswith("ast"):
-                cls , avg= model.get_intermediate_layers_chunks(inp, length, n,chunk_len=int(max_global_len*101))
-                if use_cls:
-                    output = cls
-                if avgpool:
-                    if args.last_avgpool:
-                        output.extend(avg)
-                    else:
-                        output.append(avg[-1])
-
-
-            feats = torch.cat(output, dim=-1)
-
-
-        # share features between processes
-        feats_all = torch.empty(
-            dist.get_world_size(),
-            feats.size(0),
-            feats.size(1),
-            dtype=feats.dtype,
-            device=feats.device,
-        )
-        feats_l = list(feats_all.unbind(0))
-        feats_all_reduce = torch.distributed.all_gather(feats_l, feats, async_op=True)
-        feats_all_reduce.wait()
-
-        target_all = torch.empty(
-            dist.get_world_size(),
-            *target.size(),
-            dtype=target.dtype,
-            device=target.device,
-        )
-        target_l = list(target_all.unbind(0))
-        target_all_reduce = torch.distributed.all_gather(target_l, target, async_op=True)
-        target_all_reduce.wait()
-
-        # update storage feature matrix
-        if dist.get_rank() == 0:
-            X.append(torch.cat(feats_l,dim=0).cpu())
-            Y.append(torch.cat(target_l,dim=0).cpu())
-
-
-        torch.cuda.synchronize()
-        time.sleep(0.1)
-    # gather the stats from all processes
-    X=torch.cat(X,dim=0)
-    Y=torch.cat(Y,dim=0)
-    print(f"Storing features into tensor of shape {X.shape},{Y.shape}")
-    return X,Y
-
-def get_unit_sec(dataset_name,pos_type,max_global_len):
-    unit_sec = 1
-    if dataset_name == "spcv2":
-        unit_sec = 1
-    elif dataset_name == "nsynth":
-        unit_sec = 4
-    elif dataset_name == "us8k":
-        unit_sec=4
-    elif dataset_name == "voxceleb1":
-        unit_sec=8.2
-    elif dataset_name == "iemocap":
-        unit_sec=4
-    elif dataset_name == "audioset_b":
-        unit_sec=6
-    elif dataset_name == "audioset":
-        unit_sec=6
-
-    if pos_type == "cut": 
-        unit_sec = min(unit_sec,max_global_len)
-    
-    return unit_sec
+MULTI_LABEL={
+    "spcv2":False,
+    "nsynth":False,
+    "us8k":False,
+    "voxceleb1":False,
+    "iemocap":False,
+    "audioset_b":True,
+    "audioset":True
+}
 
 NUM_LABELS={
     "spcv2":35,
@@ -155,3 +80,57 @@ NUM_LABELS={
     "audioset_b":527,
     "audioset":527
 }
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.reshape(1, -1).expand_as(pred))
+    return [correct[:k].reshape(-1).float().sum(0) * 100. / batch_size for k in topk]
+
+import numpy as np
+from sklearn import metrics
+class Metric:
+    preds = []
+    targets = []
+    def __init__(self,mode="ACC"):
+        self.mode=mode
+        self.clear()
+    def update(self,pred,target):
+        self.preds.append(pred)
+        self.targets.append(target)
+    def clear(self):
+        self.preds = []
+        self.targets = []
+    def compute(self):
+        preds = np.concatenate(self.preds,axis=0)
+        targets = np.concatenate(self.targets,axis=0)
+        if self.mode == "mAP":
+            mAPs =[]
+            for i in range(preds.shape[-1]):
+                mAPs.append(metrics.average_precision_score(targets[:,i],preds[:,i],average=None))
+            mAP = np.mean(mAPs)
+            return mAP
+        else:
+            acc = metrics.top_k_accuracy_score(targets,preds,k=1,labels=np.linspace(0,preds.shape[-1]-1,preds.shape[-1]))
+            return acc
+
+def load_pretrained_weights(model, pretrained_weights, checkpoint_key):
+    if os.path.isfile(pretrained_weights):
+        state_dict = torch.load(pretrained_weights, map_location="cpu")
+        if checkpoint_key is not None and checkpoint_key in state_dict:
+            print(f"Take key {checkpoint_key} in provided checkpoint dict")
+            state_dict = state_dict[checkpoint_key]
+        # remove `module.` prefix
+        state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        # remove `backbone.` prefix induced by multicrop wrapper
+        state_dict = {k.replace("backbone.", ""): v for k, v in state_dict.items()}
+        msg = model.load_state_dict(state_dict, strict=False)
+        print('Pretrained weights found at {} and loaded with msg: {}'.format(pretrained_weights, msg))
+    else:
+        print("Please use the `--pretrained_weights` argument to indicate the path of the checkpoint to evaluate.")
+        exit()
+
+
