@@ -16,11 +16,13 @@ import time
 import glob
 import tqdm
 from pathlib import Path
+from audiossl.datasets import register_dataset
 
 CACHE_PATH = os.path.join(os.path.dirname(__file__), '.cache/')
 
 
 # Voxceleb 1 Speaker Identification
+
 class SpeakerClassifiDataset(Dataset):
     def __init__(self, mode, file_path, meta_data, max_timestep=None,sr=16000, transform=None, target_transform=None):
 

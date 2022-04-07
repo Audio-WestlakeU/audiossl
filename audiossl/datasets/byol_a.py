@@ -22,6 +22,7 @@ import subprocess
 import torch
 from torch.utils.data import Dataset
 import torchaudio
+from audiossl.datasets import register_dataset
 
 
 
@@ -201,7 +202,6 @@ class Nsynth(Dataset):
 
     def __len__(self):
         return len(self.file_names)
-
 
 class Urbansound8k(Dataset):
     def __init__(self,path,split="train",valid_fold=10,sr=16000,transform=None):
