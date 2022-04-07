@@ -10,4 +10,9 @@ setup(
     author='lixian',
     email='lixian@westlake.edu.cn',
     packages=packages,
-)
+    entry_points={
+                  'console_scripts':[
+                                    'atst_transfer_train=audiossl.methods.atst.transfer.train:main' 
+                                    ]
+                 }
+      )

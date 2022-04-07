@@ -1,9 +1,11 @@
 from pytorch_lightning import LightningDataModule
 from torch.utils import data
-from utils import load_dataset
-from transform import FreezingTransferTrainTransform
+from audiossl.methods.atst.transfer.utils import load_dataset
+from audiossl.methods.atst.transfer.transform import FreezingTransferTrainTransform
 import torch
 import torch.nn.functional as F
+from audiossl import datasets
+
 
 def collate_fn(data):
     spec_l = []
@@ -25,45 +27,83 @@ class FreezingTransferDataModule(LightningDataModule):
     def __init__(self,
                  data_path:str,
                  dataset_name:str,
-                 fold:int,
+
+                 fold:int = 0,
                  batch_size_per_gpu=1024,
                  num_workers=10,
                  **kwargs
                  ):
         super().__init__()
-        self.batch_size=batch_size_per_gpu
+        self.batch_size=min(512,batch_size_per_gpu)
         self.num_workers=num_workers
         dataset_train,dataset_val,dataset_test = load_dataset(dataset_name,
                                                               data_path,
                                                               fold,
                                                               FreezingTransferTrainTransform())
-        self.dataset_train = dataset_train
-        self.dataset_val = dataset_val
-        self.dataset_test = dataset_test
+        transform = FreezingTransferTrainTransform()
+        dataset_info=datasets.get_dataset(dataset_name)
+        num_folds = dataset_info.num_folds
+        self.num_labels=dataset_info.num_labels
+        self.multi_label=dataset_info.multi_label
+        if num_folds > 1:
+            self.dataset_train = dataset_info.creator(data_path,
+                                                      "train",
+                                                      fold,
+                                                      transform,
+                                                      target_transform=None)
+            self.dataset_val = dataset_info.creator(data_path,
+                                                      "valid",
+                                                      fold,
+                                                      transform,
+                                                      target_transform=None)
+            self.dataset_test = dataset_info.creator(data_path,
+                                                      "test",
+                                                      fold,
+                                                      transform,
+                                                      target_transform=None)
+        else:
+            self.dataset_train = dataset_info.creator(data_path,
+                                                      "train",
+                                                      transform,
+                                                      target_transform=None)
+            self.dataset_val = dataset_info.creator(data_path,
+                                                      "valid",
+                                                      transform,
+                                                      target_transform=None)
+            self.dataset_test = dataset_info.creator(data_path,
+                                                      "test",
+                                                      transform,
+                                                      target_transform=None)
     def prepare_data(self):
         pass
 
     def train_dataloader(self):
         return data.DataLoader(self.dataset_train,
-                        self.batch_size,
-                        self.num_workers,
+                        batch_size=self.batch_size,
+                        num_workers=self.num_workers,
+                        shuffle=False,
                         sampler=None,
                         drop_last=False,
-                        collate_fn=collate_fn)
+                        collate_fn=collate_fn,
+                        pin_memory=True)
     def val_dataloader(self):
         return data.DataLoader(self.dataset_val,
-                        self.batch_size,
-                        self.num_workers,
+                        batch_size=self.batch_size,
+                        num_workers=self.num_workers,
+                        shuffle=False,
                         sampler=None,
                         drop_last=False,
-                        collate_fn=collate_fn)
+                        collate_fn=collate_fn,
+                        pin_memory=True)
     def test_dataloader(self):
         return data.DataLoader(self.dataset_test,
-                        self.batch_size,
-                        self.num_workers,
+                        batch_size=self.batch_size,
+                        num_workers=self.num_workers,
+                        shuffle=False,
                         sampler=None,
                         drop_last=False,
-                        collate_fn=collate_fn)
+                        collate_fn=collate_fn,
+                        pin_memory=True)
 
 
     @staticmethod

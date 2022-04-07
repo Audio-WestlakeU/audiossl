@@ -356,8 +356,9 @@ class AST(nn.Module):
 
             cls_out.append(cls_)
             avg_out.append(avg_)
+        return torch.cat(cls_out+avg_out,dim=-1)
+        #return cls_out,avg_out
 
-        return cls_out,avg_out
 def get_cls_avg(output_i,cur_len,use_cls):
     if use_cls:
         length_mask = torch.arange(output_i[0].shape[1]-1).to(output_i[0].device) < cur_len.unsqueeze(1)
