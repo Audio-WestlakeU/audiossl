@@ -34,7 +34,7 @@ class ATSTDataModule(LightningDataModule):
         parser = parent_parser.add_argument_group("ATSTData")
         parser.add_argument("--data_path", type=str, default=None, help="data path")
         parser.add_argument('--batch_size_per_gpu', default=256, type=int,
-            help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
+            help='Per-GPU batch-size : number of distinct samples loaded on one GPU.')
         parser.add_argument('--num_workers', default=10, type=int, help='Number of data loading workers per GPU.')
         parser.add_argument('--subset', default=200000, type=int, help='subset of training data')
         return parent_parser

@@ -12,7 +12,7 @@ setup(
     packages=packages,
     entry_points={
                   'console_scripts':[
-                                    'atst_transfer_train=audiossl.methods.atst.transfer.train:main' 
+                                    'atst_downstream_train_freeze=audiossl.methods.atst.downstream.train_freeze:main' 
                                     ]
                  }
       )

@@ -4,6 +4,8 @@ import pprint
 DATASET_REGISTRY={}
 
 class DatasetInfo:
+    """Placeholder for properties of dataset
+    """
     def __init__(self, **kwargs): 
         self.__dict__.update(kwargs)
     def __str__(self):
@@ -12,6 +14,16 @@ class DatasetInfo:
 
 
 def get_dataset(name:str) -> DatasetInfo:
+    """
+    Example::
+
+            datasetinfo = get_dataset("spcv2")
+            print(datasetinfo)
+            creat_fn=datasetinfo.creator
+            num_labels=datsetinfo.num_labels
+            multi_label=datasetinfo.multi_label
+
+    """
     if name in DATASET_REGISTRY.keys():
         return DATASET_REGISTRY[name]
     else:

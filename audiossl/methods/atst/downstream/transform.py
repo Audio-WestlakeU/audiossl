@@ -3,7 +3,7 @@ import torchaudio
 from audiossl.transforms.common import Normalize,MinMax,RandomCrop,Identity,CentralCrop
 from audiossl.transforms.byol_a import Mixup, RandomResizeCrop
 from torchvision import transforms
-class FreezingTransferTrainTransform:
+class FreezingTransform:
     def __init__(self,sr=16000,max_len=12):
         melspec_t = torchaudio.transforms.MelSpectrogram(
             sr, f_min=60, f_max=7800, hop_length=160, win_length=1024, n_fft=1024, n_mels=64)

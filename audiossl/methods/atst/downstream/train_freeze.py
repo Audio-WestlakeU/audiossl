@@ -8,13 +8,12 @@ from audiossl.lightning.datamodules import (DownstreamDataModule,
                                             get_inmemory_datamodule)
 from audiossl.lightning.utils import EmbeddingExtractor
 from audiossl.methods.atst.model import ATSTLightningModule
-from audiossl.methods.atst.transfer import utils
-from audiossl.methods.atst.transfer.data import (FreezingTransferDataModule,
-                                                 collate_fn)
-from audiossl.methods.atst.transfer.model import (
-    FreezingTransferLightningModule, PretrainedEncoderLightningModel)
-from audiossl.methods.atst.transfer.transform import \
-    FreezingTransferTrainTransform
+from audiossl.methods.atst.downstream import utils
+from audiossl.methods.atst.downstream.data import collate_fn
+from audiossl.methods.atst.downstream.model import (
+    LinearClassifierPLModule, PretrainedEncoderPLModule)
+from audiossl.methods.atst.downstream.transform import \
+    FreezingTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -33,7 +32,7 @@ def get_pretraied_encoder(args):
             args.pretrained_ckpt_path)
         pretrained_encoder = pretrained_model.model.teacher.encoder
     else:
-        from audiossl.methods.atst.transfer.utils import \
+        from audiossl.methods.atst.downstream.utils import \
             load_pretrained_weights
         from audiossl.models.atst.audio_transformer import AST_base, AST_small
         pretrained_encoder = AST_small()
@@ -68,7 +67,7 @@ def run(args, pretrained_module, fold=None):
     dict_args = vars(args)
 
     """extract embedding"""
-    transform = FreezingTransferTrainTransform()
+    transform = FreezingTransform()
     data = DownstreamDataModule(**dict_args,
                                 batch_size=min(512, args.batch_size_per_gpu),
                                 fold=fold,
@@ -101,7 +100,7 @@ def run(args, pretrained_module, fold=None):
                                                   y_test,
                                                   args.batch_size_per_gpu)
 
-    model = FreezingTransferLightningModule(
+    model = LinearClassifierPLModule(
         embed_dim=embed_dim,
         num_labels=num_labels,
         multi_label=multi_label,
@@ -153,7 +152,7 @@ def main():
     parser.add_argument("--pretrained_ckpt_path", type=str)
     parser.add_argument("--save_path", type=str)
     parser.add_argument('--nproc', type=int,  default=1)
-    parser = FreezingTransferLightningModule.add_model_specific_args(parser)
+    parser = LinearClassifierPLModule.add_model_specific_args(parser)
     parser = DownstreamDataModule.add_data_specific_args(parser)
 
     args = parser.parse_args()
@@ -163,7 +162,7 @@ def main():
 
     """load pretrained encoder"""
     pretrained_encoder = get_pretraied_encoder(args)
-    pretrained_module = PretrainedEncoderLightningModel(pretrained_encoder,
+    pretrained_module = PretrainedEncoderPLModule(pretrained_encoder,
                                                         6.,
                                                         args.n_last_blocks)
     pretrained_module.freeze()
