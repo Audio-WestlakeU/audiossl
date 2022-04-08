@@ -11,7 +11,7 @@ from audiossl.methods.atst.model import ATSTLightningModule
 from audiossl.methods.atst.downstream import utils
 from audiossl.methods.atst.downstream.data import collate_fn
 from audiossl.methods.atst.downstream.model import (
-    LinearClassifierPLModule, PretrainedEncoderPLModule)
+    FineTuningPLModule, PretrainedEncoderPLModule)
 from audiossl.methods.atst.downstream.transform import \
     FreezingTransform
 from pytorch_lightning import Trainer
@@ -41,41 +41,16 @@ def get_pretraied_encoder(args):
     return pretrained_encoder
 
 
-def extract_embedding(pretrained_module, data, nproc):
-    extracter=EmbeddingExtractor(pretrained_module,nproc=nproc)
-    result = extracter.extract(data.train_dataloader())
-    result = [r for r in zip(*result)]
-    x_train, y_train = result
-    x_train = torch.cat(x_train, dim=0)
-    y_train = torch.cat(y_train, dim=0)
-
-    result = extracter.extract(data.val_dataloader())
-    result = [r for r in zip(*result)]
-    x_val, y_val = result
-    x_val = torch.cat(x_val, dim=0)
-    y_val = torch.cat(y_val, dim=0)
-
-    result = extracter.extract(data.test_dataloader())
-    result = [r for r in zip(*result)]
-    x_test, y_test = result
-    x_test = torch.cat(x_test, dim=0)
-    y_test = torch.cat(y_test, dim=0)
-    return x_train, y_train, x_val, y_val, x_test, y_test
-
-
 def run(args, pretrained_module, fold=None):
     dict_args = vars(args)
 
     """extract embedding"""
     transform = FreezingTransform()
     data = DownstreamDataModule(**dict_args,
+                                batch_size=min(512, args.batch_size_per_gpu),
                                 fold=fold,
                                 collate_fn=collate_fn,
-                                transforms=[transform]*3,
-                                limit_batch_size=min(512,args.batch_size_per_gpu))
-    x_train, y_train, x_val, y_val, x_test, y_test = extract_embedding(pretrained_module,
-                                                                       data,
-                                                                       args.nproc)
+                                transforms=[transform]*3)
 
     """train a linear classifier on extracted embedding"""
     if fold is None or fold == 1:
@@ -88,22 +63,14 @@ def run(args, pretrained_module, fold=None):
     dict_args = vars(args)
     logger_tb = TensorBoardLogger(save_path, name="tb_logs")
     #logger_wb = WandbLogger(save_dir=args.save_path,name="wb_logs")
-    embed_dim = x_train.shape[1]
     num_labels = data.num_labels
     multi_label = data.multi_label
 
-    inmemory_datamodule = get_inmemory_datamodule(x_train,
-                                                  y_train,
-                                                  x_val,
-                                                  y_val,
-                                                  x_test,
-                                                  y_test,
-                                                  args.batch_size_per_gpu)
-
-    model = LinearClassifierPLModule(
-        embed_dim=embed_dim,
+    model = FineTuningPLModule(
+        encoder=pretrained_module,
         num_labels=num_labels,
         multi_label=multi_label,
+        niter_per_epoch=len(data.train_dataloader()),
         **dict_args)
     ckpt_cb = ModelCheckpoint(dirpath=save_path,
                               every_n_epochs=1,
@@ -125,9 +92,9 @@ def run(args, pretrained_module, fold=None):
         ],
     )
     last_ckpt = os.path.join(save_path, "last.ckpt")
-    trainer.fit(model, datamodule=inmemory_datamodule,
+    trainer.fit(model, datamodule=data,
                 ckpt_path=last_ckpt if os.path.exists(last_ckpt) else None)
-    trainer.test(model, datamodule=inmemory_datamodule,
+    trainer.test(model, datamodule=data,
                  ckpt_path=ckpt_cb.best_model_path)
     score = trainer.logged_metrics["test_"+model.metric.mode]
     print("test score {}".format(score))
@@ -145,14 +112,14 @@ def run_n_folds(args, pretrained_module, num_folds):
 
 
 def main():
-    parser = ArgumentParser("LinearClassifier")
+    parser = ArgumentParser("FineTuning")
     #parser = Trainer.add_argparse_args(parser)
 
     parser.add_argument("--n_last_blocks", type=int, default=12)
-    parser.add_argument("--pretrained_ckpt_path", type=str)
-    parser.add_argument("--save_path", type=str)
+    parser.add_argument("--pretrained_ckpt_path", type=str,required=True)
+    parser.add_argument("--save_path", type=str,required=True)
     parser.add_argument('--nproc', type=int,  default=1)
-    parser = LinearClassifierPLModule.add_model_specific_args(parser)
+    parser = FineTuningPLModule.add_model_specific_args(parser)
     parser = DownstreamDataModule.add_data_specific_args(parser)
 
     args = parser.parse_args()
@@ -165,7 +132,7 @@ def main():
     pretrained_module = PretrainedEncoderPLModule(pretrained_encoder,
                                                         6.,
                                                         args.n_last_blocks)
-    pretrained_module.freeze()
+    pretrained_module.unfreeze()
 
     """train"""
     if num_folds > 1:
@@ -176,3 +143,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
