@@ -5,7 +5,7 @@ from audiossl.models.atst import audio_transformer
 import torch
 from torch import nn
 from torch.nn import functional as F
-from audiossl.methods.atst.transfer.utils import Metric
+from audiossl.methods.atst.downstream.utils import Metric
 
 
 def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -13,7 +13,7 @@ def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.
     return F.binary_cross_entropy_with_logits(x, y.float())
 
 
-class PretrainedEncoderLightningModel(LightningModule):
+class PretrainedEncoderPLModule(LightningModule):
     def __init__(self,
                  pretrained_encoder: audio_transformer.AST,
                  chunk_len: float,
@@ -34,7 +34,7 @@ class PretrainedEncoderLightningModel(LightningModule):
         return x, y
 
 
-class FreezingTransferLightningModule(LightningModule):
+class LinearClassifierPLModule(LightningModule):
     def __init__(self,
                  learning_rate,
                  max_epochs,
