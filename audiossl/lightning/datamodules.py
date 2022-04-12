@@ -27,10 +27,12 @@ class DownstreamDataModule(LightningDataModule):
                  transforms=[None,None,None],
                  target_transforms=[None,None,None],
                  collate_fn=None,
+                 limit_batch_size=None,
                  **kwargs
                  ):
         super().__init__()
-        self.batch_size=min(512,batch_size_per_gpu)
+        self.batch_size=min(limit_batch_size,batch_size_per_gpu)\
+            if limit_batch_size is not None else batch_size_per_gpu
         self.num_workers=num_workers
         self.transforms=transforms
         self.target_transforms=target_transforms
