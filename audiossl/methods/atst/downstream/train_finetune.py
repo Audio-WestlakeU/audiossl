@@ -18,6 +18,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.profiler import SimpleProfiler
+from copy import deepcopy
 
 
 
@@ -67,7 +68,7 @@ def run(args, pretrained_module, fold=None):
     multi_label = data.multi_label
 
     model = FineTuningPLModule(
-        encoder=pretrained_module,
+        encoder=deepcopy(pretrained_module),
         num_labels=num_labels,
         multi_label=multi_label,
         niter_per_epoch=len(data.train_dataloader()),
