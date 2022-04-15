@@ -45,7 +45,7 @@ class FinetuneTrainTransform:
                                 normalize]
                                 )
 
-        self.global_transform1 = transforms.Compose(
+        self.global_transform = transforms.Compose(
                                 [RandomCrop(int(sr*max_len),pad=False),
                                 self.mel_feature,
                                 ]

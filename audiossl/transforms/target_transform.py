@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 class MixupSpecLabel:
-    def __init__(self,alpha=1.0,n_memory=5000,num_classes=100):
+    def __init__(self,alpha=0.5,n_memory=5000,num_classes=100):
         self.alpha = alpha
         self.memory_bank = []
         self.n=n_memory

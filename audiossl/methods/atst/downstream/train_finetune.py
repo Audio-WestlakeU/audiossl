@@ -13,7 +13,7 @@ from audiossl.methods.atst.downstream.data import collate_fn
 from audiossl.methods.atst.downstream.model import (
     FineTuningPLModule, PretrainedEncoderPLModule)
 from audiossl.methods.atst.downstream.transform import \
-    FreezingTransform
+    FreezingTransform, FinetuneTargetTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -47,11 +47,16 @@ def run(args, pretrained_module, fold=None):
 
     """extract embedding"""
     transform = FreezingTransform()
+    if args.mixup_training:
+        target_transform = FinetuneTargetTransform(num_classes=datasets.get_dataset(args.dataset_name).num_labels)
+    else:
+        target_transform = None
     data = DownstreamDataModule(**dict_args,
-                                batch_size=min(512, args.batch_size_per_gpu),
+                                batch_size=args.batch_size_per_gpu,
                                 fold=fold,
                                 collate_fn=collate_fn,
-                                transforms=[transform]*3)
+                                transforms=[transform]*3,
+                                target_transforms=[target_transform,None,None])
 
     """train a linear classifier on extracted embedding"""
     if fold is None or fold == 1:
@@ -65,13 +70,14 @@ def run(args, pretrained_module, fold=None):
     logger_tb = TensorBoardLogger(save_path, name="tb_logs")
     #logger_wb = WandbLogger(save_dir=args.save_path,name="wb_logs")
     num_labels = data.num_labels
+
     multi_label = data.multi_label
 
     model = FineTuningPLModule(
-        encoder=deepcopy(pretrained_module),
+        encoder=pretrained_module,
         num_labels=num_labels,
         multi_label=multi_label,
-        niter_per_epoch=len(data.train_dataloader()),
+        niter_per_epoch=len(data.train_dataloader())//args.nproc,
         **dict_args)
     ckpt_cb = ModelCheckpoint(dirpath=save_path,
                               every_n_epochs=1,
@@ -105,7 +111,7 @@ def run(args, pretrained_module, fold=None):
 def run_n_folds(args, pretrained_module, num_folds):
     test_metrics = []
     for fold in range(num_folds):
-        test_metrics.append(run(args, pretrained_module, fold+1))
+        test_metrics.append(run(args, deepcopy(pretrained_module), fold+1))
     test_metrics = torch.stack(test_metrics)
     avg = torch.mean(test_metrics)
     print("{} folds's test scores:{}".format(num_folds, test_metrics))
@@ -119,6 +125,7 @@ def main():
     parser.add_argument("--n_last_blocks", type=int, default=12)
     parser.add_argument("--pretrained_ckpt_path", type=str,required=True)
     parser.add_argument("--save_path", type=str,required=True)
+    parser.add_argument("--mixup_training", type=bool,default=False)
     parser.add_argument('--nproc', type=int,  default=1)
     parser = FineTuningPLModule.add_model_specific_args(parser)
     parser = DownstreamDataModule.add_data_specific_args(parser)
