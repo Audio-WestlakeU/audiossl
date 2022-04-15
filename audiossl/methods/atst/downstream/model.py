@@ -130,6 +130,7 @@ class FineTuningPLModule(LightningModule):
                  warmup_epochs,
                  num_labels,
                  multi_label=False,
+                 mixup_training=False,
                  **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
@@ -140,10 +141,15 @@ class FineTuningPLModule(LightningModule):
         self.encoder = encoder
         self.head = LinearHead(encoder.embed_dim, num_labels)
         self.multi_label = multi_label
+        self.mixup_training = mixup_training
+        self.num_labels = num_labels
 
-        if multi_label:
+        if multi_label or self.mixup_training:
             self.loss_fn = binary_cross_entropy_with_logits
-            self.metric = Metric(mode="mAP")
+            if multi_label:
+                self.metric = Metric(mode="mAP")
+            else:
+                self.metric = Metric(mode="ACC")
         else:
             self.loss_fn = nn.CrossEntropyLoss()
             self.metric = Metric(mode="ACC")
@@ -157,8 +163,9 @@ class FineTuningPLModule(LightningModule):
     def training_step(self, batch, batch_idx):
         self.schedule()
         x,y=self.encoder(batch)
-        if self.multi_label == False and y.dim() > 1:
+        if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y = y.argmax(-1)
+        
         x = self.head(x)
         loss = self.loss_fn(x,y)
         self.log("lr",self.trainer.optimizers[0].param_groups[0]["lr"],prog_bar=True,logger=True)
@@ -179,11 +186,14 @@ class FineTuningPLModule(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x,y=self.encoder(batch)
-        if self.multi_label == False and y.dim() > 1:
-            y = y.argmax(-1)
+        y_=y
+        if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
+            y_ = y.argmax(-1)
+        if self.mixup_training == True and y.dim() == 0 :
+            y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
-        loss = self.loss_fn(x,y)
-        self._cal_metric(x,y)
+        loss = self.loss_fn(x,y_)
+        self._cal_metric(x,y_.argmax(-1) if self.mixup_training else y_)
         return loss
     def on_validation_epoch_end(self) -> None:
         metric  = self.metric.compute()
@@ -193,11 +203,14 @@ class FineTuningPLModule(LightningModule):
 
     def test_step(self, batch, batch_idx):
         x,y=self.encoder(batch)
-        if self.multi_label == False and y.dim() > 1:
-            y = y.argmax(-1)
+        y_=y
+        if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
+            y_ = y.argmax(-1)
+        if self.mixup_training == True and y.dim() == 0 :
+            y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
-        loss = self.loss_fn(x,y)
-        self._cal_metric(x,y)
+        loss = self.loss_fn(x,y_)
+        self._cal_metric(x,y_.argmax(-1) if self.mixup_training else y_)
         return loss
     def on_test_epoch_end(self) -> None:
         metric  = self.metric.compute()
