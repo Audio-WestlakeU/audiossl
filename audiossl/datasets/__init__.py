@@ -17,7 +17,8 @@ def create_voxceleb1(data_path,split,transform,target_transform):
     return SpeakerClassifiDataset(split,
                                 Path(data_path),
                                 Path(os.path.join(data_path,"iden_split.txt")),
-                                transform=transform)
+                                transform=transform,
+                                target_transform=target_transform)
 @register_dataset("us8k",multi_label=False,num_labels=10,num_folds=10)
 def create_us8k(data_path,split,fold,transform,target_transform):
     return Urbansound8k(data_path,split=split,valid_fold=fold,transform=transform)
@@ -30,19 +31,19 @@ def create_nsynth(data_path,split,transform,target_transform):
 def create_spcv2(data_path,split,transform,target_transform):
     if split == "test":
         split = "eval"
-    return LMDBDataset(data_path,split=split,transform=transform) 
+    return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform) 
 
 @register_dataset("audioset_b",multi_label=True,num_labels=527,num_folds=1)
 def create_spcv2(data_path,split,transform,target_transform):
     if split == "test":
         split = "eval"
-    return LMDBDataset(data_path,split=split,transform=transform) 
+    return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform) 
 
 @register_dataset("audioset",multi_label=True,num_labels=527,num_folds=1)
 def create_spcv2(data_path,split,transform,target_transform):
     if split == "test":
         split = "eval"
-    return LMDBDataset(data_path,split=split,transform=transform) 
+    return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform) 
 
 
 
