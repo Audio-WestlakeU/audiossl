@@ -28,6 +28,7 @@ class DownstreamDataModule(LightningDataModule):
                  target_transforms=[None,None,None],
                  collate_fn=None,
                  limit_batch_size=None,
+                 shuffle = True,
                  **kwargs
                  ):
         super().__init__()
@@ -41,6 +42,7 @@ class DownstreamDataModule(LightningDataModule):
         num_folds = dataset_info.num_folds
         self.num_labels=dataset_info.num_labels
         self.multi_label=dataset_info.multi_label
+        self.shuffle = shuffle
         if num_folds > 1:
             self.dataset_train = dataset_info.creator(data_path,
                                                       "train",
@@ -70,6 +72,7 @@ class DownstreamDataModule(LightningDataModule):
                                                       "test",
                                                       transforms[2],
                                                       target_transform=target_transforms[2])
+        self.save_hyperparameters()
     def prepare_data(self):
         pass
 
@@ -77,7 +80,7 @@ class DownstreamDataModule(LightningDataModule):
         return data.DataLoader(self.dataset_train,
                         batch_size=self.batch_size,
                         num_workers=self.num_workers,
-                        shuffle=False,
+                        shuffle=self.shuffle,
                         sampler=None,
                         drop_last=False,
                         collate_fn=self.collate_fn,
