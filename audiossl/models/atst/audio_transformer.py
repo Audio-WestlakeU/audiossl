@@ -264,7 +264,7 @@ class AST(nn.Module):
                 output.append(self.norm(x_))
         return output
         
-    def get_intermediate_layers_chunks(self, x,length, n=1, chunk_len=401):
+    def get_intermediate_layers_chunks(self, x,length, n=1,  chunk_len=401, avgpool=True):
         total_len = x.shape[-1]
         num_chunks = total_len // chunk_len + 1
         cls = []
@@ -356,7 +356,10 @@ class AST(nn.Module):
 
             cls_out.append(cls_)
             avg_out.append(avg_)
-        return torch.cat(cls_out+avg_out,dim=-1)
+        if avgpool:
+            return torch.cat(cls_out+avg_out,dim=-1)
+        else:
+            return torch.cat(cls_out,dim=-1)
         #return cls_out,avg_out
 
 def get_cls_avg(output_i,cur_len,use_cls):

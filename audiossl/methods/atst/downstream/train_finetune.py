@@ -13,7 +13,7 @@ from audiossl.methods.atst.downstream.data import collate_fn
 from audiossl.methods.atst.downstream.model import (
     FineTuningPLModule, PretrainedEncoderPLModule)
 from audiossl.methods.atst.downstream.transform import \
-    FreezingTransform, FinetuneTargetTransform
+    FreezingTransform, FinetuneTargetTransform, FinetuneTrainTransform, FinetuneEvalTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -44,9 +44,16 @@ def get_pretraied_encoder(args):
 
 def run(args, pretrained_module, fold=None):
     dict_args = vars(args)
+    if fold is None or fold == 1:
+        args.learning_rate = args.learning_rate*args.nproc*args.batch_size_per_gpu/256
+    if fold is not None:
+        save_path = os.path.join(args.save_path, "fold{}".format(fold))
+    else:
+        save_path = args.save_path
 
     """extract embedding"""
-    transform = FreezingTransform()
+    train_transform = FinetuneTrainTransform()
+    eval_trainsform = FinetuneEvalTransform()
     if args.mixup_training:
         target_transform = FinetuneTargetTransform(num_classes=datasets.get_dataset(args.dataset_name).num_labels)
     else:
@@ -55,16 +62,10 @@ def run(args, pretrained_module, fold=None):
                                 batch_size=args.batch_size_per_gpu,
                                 fold=fold,
                                 collate_fn=collate_fn,
-                                transforms=[transform]*3,
+                                transforms=[train_transform,eval_trainsform,eval_trainsform],
                                 target_transforms=[target_transform,None,None])
 
     """train a linear classifier on extracted embedding"""
-    if fold is None or fold == 1:
-        args.learning_rate = args.learning_rate*args.nproc*args.batch_size_per_gpu/256
-    if fold is not None:
-        save_path = os.path.join(args.save_path, "fold{}".format(fold))
-    else:
-        save_path = args.save_path
     # train
     dict_args = vars(args)
     logger_tb = TensorBoardLogger(save_path, name="tb_logs")
@@ -77,7 +78,7 @@ def run(args, pretrained_module, fold=None):
         encoder=pretrained_module,
         num_labels=num_labels,
         multi_label=multi_label,
-        niter_per_epoch=len(data.train_dataloader())//args.nproc,
+        niter_per_epoch=len(data.train_dataloader())//args.nproc+1,
         **dict_args)
     ckpt_cb = ModelCheckpoint(dirpath=save_path,
                               every_n_epochs=1,
@@ -91,6 +92,7 @@ def run(args, pretrained_module, fold=None):
         strategy="ddp",
         sync_batchnorm=True,
         gpus=args.nproc,
+        gradient_clip_val=3.0,
         max_epochs=args.max_epochs,
         logger=logger_tb,  # ,logger_wb],
         callbacks=[
@@ -121,11 +123,12 @@ def run_n_folds(args, pretrained_module, num_folds):
 def main():
     parser = ArgumentParser("FineTuning")
     #parser = Trainer.add_argparse_args(parser)
+    from audiossl.utils.common import bool_flag
 
     parser.add_argument("--n_last_blocks", type=int, default=12)
     parser.add_argument("--pretrained_ckpt_path", type=str,required=True)
     parser.add_argument("--save_path", type=str,required=True)
-    parser.add_argument("--mixup_training", type=bool,default=False)
+    parser.add_argument("--mixup_training", type=bool_flag,default=False)
     parser.add_argument('--nproc', type=int,  default=1)
     parser = FineTuningPLModule.add_model_specific_args(parser)
     parser = DownstreamDataModule.add_data_specific_args(parser)

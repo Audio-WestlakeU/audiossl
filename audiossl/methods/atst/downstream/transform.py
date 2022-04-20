@@ -70,7 +70,7 @@ class FinetuneEvalTransform:
                                 normalize]
                                 )
 
-        self.global_transform1 = transforms.Compose(
+        self.global_transform = transforms.Compose(
                                 [CentralCrop(int(sr*max_len),pad=False),
                                 self.mel_feature,
                                 ]
