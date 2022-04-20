@@ -19,19 +19,25 @@ class PretrainedEncoderPLModule(LightningModule):
     def __init__(self,
                  pretrained_encoder: audio_transformer.AST,
                  chunk_len: float,
-                 n_blocks: int):
+                 n_blocks: int,
+                 avgpool:bool = True):
         super().__init__()
         self.encoder = pretrained_encoder
         self.chunk_len = int((chunk_len * 16000)/160 + 1)
         self.n_blocks = n_blocks
-        self.embed_dim = self.encoder.embed_dim*2*n_blocks
+        self.avgpool = avgpool
+        if avgpool:
+            self.embed_dim = self.encoder.embed_dim*2*n_blocks
+        else:
+            self.embed_dim = self.encoder.embed_dim*n_blocks
 
     def forward(self, batch):
         (x, length), y = batch
         x = self.encoder.get_intermediate_layers_chunks(x,
                                                         length,
                                                         self.n_blocks,
-                                                        self.chunk_len)
+                                                        self.chunk_len,
+                                                        avgpool=self.avgpool)
         return x, y
 
 
@@ -65,7 +71,6 @@ class LinearClassifierPLModule(LightningModule):
         x = self.head(x)
         loss = self.loss_fn(x,y)
         self.log("lr",self.trainer.optimizers[0].param_groups[0]["lr"],prog_bar=True,logger=True)
-        self.optimizers()
         return loss
 
     def _cal_metric(self,output,target):
@@ -139,7 +144,7 @@ class FineTuningPLModule(LightningModule):
         self.niter_per_epoch = niter_per_epoch
 
         self.encoder = encoder
-        self.head = LinearHead(encoder.embed_dim, num_labels)
+        self.head = LinearHead(encoder.embed_dim, num_labels,use_norm=True, affine=False)
         self.multi_label = multi_label
         self.mixup_training = mixup_training
         self.num_labels = num_labels
@@ -161,6 +166,7 @@ class FineTuningPLModule(LightningModule):
         self.save_hyperparameters(ignore=["encoder"])
 
     def training_step(self, batch, batch_idx):
+        self.encoder.train()
         self.schedule()
         x,y=self.encoder(batch)
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
@@ -169,6 +175,7 @@ class FineTuningPLModule(LightningModule):
         x = self.head(x)
         loss = self.loss_fn(x,y)
         self.log("lr",self.trainer.optimizers[0].param_groups[0]["lr"],prog_bar=True,logger=True)
+        self.log("train_loss",loss,prog_bar=True,logger=True)
         self.optimizers()
         return loss
 
@@ -185,6 +192,7 @@ class FineTuningPLModule(LightningModule):
 
 
     def validation_step(self, batch, batch_idx):
+        self.encoder.eval()
         x,y=self.encoder(batch)
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
@@ -193,7 +201,8 @@ class FineTuningPLModule(LightningModule):
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
         loss = self.loss_fn(x,y_)
-        self._cal_metric(x,y_.argmax(-1) if self.mixup_training else y_)
+        self.log("val_loss",loss,prog_bar=True,logger=True)
+        self._cal_metric(x,y_.argmax(-1) if self.mixup_training and (not self.multi_label) else y_)
         return loss
     def on_validation_epoch_end(self) -> None:
         metric  = self.metric.compute()
@@ -202,6 +211,7 @@ class FineTuningPLModule(LightningModule):
 
 
     def test_step(self, batch, batch_idx):
+        self.encoder.eval()
         x,y=self.encoder(batch)
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
@@ -210,7 +220,7 @@ class FineTuningPLModule(LightningModule):
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
         loss = self.loss_fn(x,y_)
-        self._cal_metric(x,y_.argmax(-1) if self.mixup_training else y_)
+        self._cal_metric(x,y_.argmax(-1) if self.mixup_training and (not self.multi_label) else y_)
         return loss
     def on_test_epoch_end(self) -> None:
         metric  = self.metric.compute()
