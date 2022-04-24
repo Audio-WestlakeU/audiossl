@@ -4,10 +4,10 @@ source ./eval_func.sh
 eval_cmd()
 {
   echo $1 $2 $3 
-  eval $1 $2 $3 $4 $5 $6 audioset /faster/lixian/audioset $7 $8 $9 0 ${10}
+  eval $1 $2  audioset /faster/lixian/audioset $3  $4
 }
 
-for lr in     1.0 5e-1
+for lr in   2.0 4.0 1.0 5e-1 
 do
-eval_cmd $epoch ${n_last_blocks} ${avgpool} ${use_cls} ${last_avgpool} ${batch_size} 10088 $1 $2 ${lr}
+eval_cmd  ${n_last_blocks}  ${batch_size}  $1  ${lr}
 done
