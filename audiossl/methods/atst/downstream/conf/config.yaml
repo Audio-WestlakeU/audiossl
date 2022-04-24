@@ -8,6 +8,19 @@ model:
                  ckpt_path: /data/home/lixian/audiossl/audiossl/methods/atst/models/model_path2/last.ckpt
                  chunk_len: 6  # second
                  n_blocks: 12
+        linearclassfier:
+                learning_rate:
+                max_epochs:
+                embed_dim:
+                num_labels:
+                nulti_label:
+train:
+        learning_rate: 
+        batch_size:
+        nproc:
+        max_epochs:
+        save_path:
+
 
         
 
