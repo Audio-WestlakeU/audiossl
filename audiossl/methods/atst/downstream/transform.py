@@ -46,7 +46,7 @@ class FinetuneTrainTransform:
                                 )
 
         self.global_transform = transforms.Compose(
-                                [RandomCrop(int(sr*max_len),pad=False),
+                                [CentralCrop(int(sr*max_len),pad=False),
                                 self.mel_feature,
                                 ]
                                 )
