@@ -1,4 +1,4 @@
-# Teacher-Student Transformer
+# Audio Representation Learning with Teacher-Student Transformer
 
 
 ## data preparation
