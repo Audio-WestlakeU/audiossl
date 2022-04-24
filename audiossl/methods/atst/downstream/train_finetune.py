@@ -36,7 +36,11 @@ def get_pretraied_encoder(args):
         from audiossl.methods.atst.downstream.utils import \
             load_pretrained_weights
         from audiossl.models.atst.audio_transformer import AST_base, AST_small
-        pretrained_encoder = AST_small()
+        load_args = torch.load(args.pretrained_ckpt_path, map_location="cpu")["args"]
+        if load_args.arch=="ast":
+            pretrained_encoder = AST_small()
+        else:
+            pretrained_encoder = AST_base()
         load_pretrained_weights(
             pretrained_encoder, pretrained_weights=args.pretrained_ckpt_path, checkpoint_key="teacher")
     return pretrained_encoder
