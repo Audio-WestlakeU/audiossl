@@ -1,5 +1,12 @@
 # Audio Representation Learning with Teacher-Student Transformer
 
+To use this repo, install audiossl first:
+
+```
+    git clone https://github.com/Audio-WestlakeU/audiossl
+    cd audiossl
+    pip install .
+```
 
 ## data preparation
 

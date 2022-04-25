@@ -1,4 +1,11 @@
 # Audio Self Supervised Learning 
+## install
+
+```
+    git clone https://github.com/Audio-WestlakeU/audiossl
+    cd audiossl
+    pip install .
+```
 
 ## methods
 
