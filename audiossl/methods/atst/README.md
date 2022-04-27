@@ -1,5 +1,18 @@
 # Audio Representation Learning with Teacher-Student Transformer
 
+The full paper can be found in the preprint https://arxiv.org/abs/2204.12076
+
+
+## Install
+
+To use this repo, install audiossl first:
+
+```
+    git clone https://github.com/Audio-WestlakeU/audiossl
+    cd audiossl
+    pip install .
+```
+
 
 ## data preparation
 
