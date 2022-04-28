@@ -12,7 +12,7 @@
     
     After downloading audioset dataset, follow the steps below:    
 
-    Put downloaded files under the folling structure
+    Put downloaded files under the following structure
     ```
     - audioset
         - audio
