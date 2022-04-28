@@ -1,7 +1,20 @@
 # Audio Representation Learning with Teacher-Student Transformer
 
-The full paper can be found in the preprint https://arxiv.org/abs/2204.12076
 
+This work focuses on the problem of segment-level gen-
+eral audio SSL, and proposes a new transformer-based teacher-
+student SSL model, named ATST.  Experiments have been conducted using the
+large-scale Audioset  dataset for pre-training. Downstream
+tasks cover all the three types of audio signals, namely audio
+event, speech, and music. Ablation experiments show the effec-
+tiveness of each of the proposed modules. The proposed model
+as a whole achieves the new state-of-the-art results on almost all
+of the downstream tasks, and surpasses other methods by a large
+margin on some of the downstream tasks. For example, the ac-
+curacy of speaker identification is 72% versus 40.1% without
+finetuning, and 94.3% versus 80.8% after finetuning.
+
+The full paper can be found in the preprint https://arxiv.org/abs/2204.12076
 
 ## Install
 
