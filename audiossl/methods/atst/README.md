@@ -55,3 +55,13 @@ To use this repo, install audiossl first:
     3. modify enviroment in eval_env.sh
 
     4. run eval_batch.sh
+
+
+## Related projects
+
+    1. https://github.com/s3prl/s3prl
+    2. https://github.com/nttcslab/byol-a
+    3. https://github.com/SarthakYadav/fsd50k-pytorch
+    4. https://github.com/facebookresearch/dino
+
+    This project learns a lot from the above projects, and some code  snippets of this project are copied or modified from them.
