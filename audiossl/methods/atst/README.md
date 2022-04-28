@@ -1,5 +1,7 @@
 # Audio Representation Learning with Teacher-Student Transformer
 
+![(a)](images/interspeech2022(a).png)
+![(b)](images/interspeech2022(b).png)
 
 This work focuses on the problem of segment-level gen-
 eral audio SSL, and proposes a new transformer-based teacher-
