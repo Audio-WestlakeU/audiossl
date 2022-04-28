@@ -28,7 +28,8 @@ from audiossl.datasets import register_dataset
 
 
 def read_task_df(task, base_folder):
-    df = pd.read_csv(Path(base_folder)/f'{task}.csv')
+    curdir = os.path.dirname(__file__)
+    df = pd.read_csv(Path(os.path.join(curdir,"byol_a_meta"))/f'{task}.csv')
     # replace all str label with int label
     df.label = df.label.map({l: i for i, l in enumerate(df.label.unique())})
     return df
