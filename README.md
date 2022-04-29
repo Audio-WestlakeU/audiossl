@@ -1,5 +1,11 @@
 # Audio Self Supervised Learning 
 
+Audiossl is a library built for audio self supervised learning. This library has two main usages: 
+
+1. use existing pretrained model to extract audio represention for downstream tasks
+
+2. provides general modules involved in audio pretraining, such as dataset loading, data transformation and etc.
+
 ## Install
 ------------------------
 
@@ -81,5 +87,20 @@ One of the difficult parts of doing research on audio self-supervised learning i
         ```
 3. Transformations
 
-    See audiossl.transforms
+    See [audiossl.transforms](audiossl/transforms). 
 
+4.  An easy-to-use lightning data module 
+    ```python
+    from audiossl.lightning.datamodules import DownstreamDataModule
+    data_module = DownStreamDataModule(data_path,
+                                      dataset_name,
+                                      batch_size=512
+                                      transforms=[train_transform,
+                                                  valid_transform,
+                                                  test_transform],
+                                                  )
+                                      target_transforms=[train_targe_transform,
+                                                        None,
+                                                        None])
+    ```
+                                    
