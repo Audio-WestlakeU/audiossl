@@ -3,6 +3,10 @@
 ## Install
 ------------------------
 
+1. install pytorch ( version 1.10.1 or higher )
+
+2. install audiossl
+
 ```
     git clone https://github.com/Audio-WestlakeU/audiossl
     cd audiossl
