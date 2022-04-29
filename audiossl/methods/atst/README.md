@@ -3,9 +3,6 @@
 ## Introduction
 ---------------------
 
-![a](images/interspeech2022(a).png)
-![b](images/interspeech2022(b).png)
-
 This work focuses on the problem of segment-level gen-
 eral audio SSL, and proposes a new transformer-based teacher-
 student SSL model, named ATST.  Experiments have been conducted using the
@@ -19,18 +16,18 @@ margin on some of the downstream tasks. For example, the ac-
 curacy of speaker identification is 72% versus 40.1% without
 finetuning, and 94.3% versus 80.8% after finetuning.
 
+![a](images/interspeech2022(a).png)
+![b](images/interspeech2022(b).png)
+
+
+
 The full paper can be found in the preprint https://arxiv.org/abs/2204.12076
 
 ## Install
 -------------------------
 
-To use this repo, install audiossl first:
+To use this repo, install [audiossl](../../../README.md) first:
 
-```
-    git clone https://github.com/Audio-WestlakeU/audiossl
-    cd audiossl
-    pip install .
-```
 
 
 ## Data preparation
@@ -43,7 +40,11 @@ See [docs/data_prep.md](docs/data_prep.md)
 ## Downstream evaluation
 ---------------------------------
 
-<!--**Pretrained checkpoints (small.ckpt and base.ckpt)** of ATST model are provided in "ckpts" directory.-->
+1. Download pretrained checkpoints
+
+    [small.ckpt](https://checkpointstorage.oss-cn-beijing.aliyuncs.com/atst/small.ckpt)
+
+    [base.ckpt](https://checkpointstorage.oss-cn-beijing.aliyuncs.com/atst/base.ckpt)
 
 1. Linear evaluation
 
@@ -57,7 +58,7 @@ See [docs/data_prep.md](docs/data_prep.md)
 
 
 
-2. Finetuning
+1. Finetuning
 
     1. go to shell/downstream/finetune
 
