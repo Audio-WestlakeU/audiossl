@@ -61,35 +61,35 @@ class DUAL(nn.Module):
         elif arch == "base":
             self.patchnet = AST_base(use_cls=False,patch_h=16,patch_w=16)
             self.framenet = AST_base(use_cls=False,patch_h=64,patch_w=4)
-        #self.patch_expander = build_expander(3,self.patchnet.embed_dim,8192,8192)
-        #self.frame_expander = build_expander(3,self.framenet.embed_dim,8192,8192)
+        self.patch_expander = build_expander(3,self.patchnet.embed_dim,8192,64*4)
+        self.frame_expander = build_expander(3,self.framenet.embed_dim,8192,64*4)
         
     def forward(self,x_frame,x_patch,mask_frame,mask_patch):
 
-        patch_x = self.patchnet(x_patch,mask_patch)
-        frame_x = self.framenet(x_frame,mask_frame)
+        patch_x,patch_mel = self.patchnet(x_patch,mask_patch)
+        frame_x,frame_mel = self.framenet(x_frame,mask_frame)
 
         mask = mask_patch | mask_frame
 
         patch_x = patch_x[mask]
         frame_x = frame_x[mask]
 
+        patch_mel = patch_mel[mask]
+        frame_mel = frame_mel[mask]
+
 
         T,C = patch_x.shape
         if 1: # average
-            patch_x = patch_x.reshape(T//4,4,C)
-            patch_x = torch.mean(patch_x,dim=1) 
-            frame_x = frame_x.reshape(T//4,4,C)
-            frame_x = torch.mean(frame_x,dim=1) 
-        else: # expander
-            patch_x = patch_x.reshape(T//4,4,C)
-            patch_x = torch.mean(patch_x,dim=1) 
-            frame_x = frame_x.reshape(T//4,4,C)
-            frame_x = torch.mean(frame_x,dim=1) 
-            #patch_x = patch_x.reshape(T//4,4*C)
-            #frame_x = frame_x.reshape(T//4,4*C)
-            patch_x = self.patch_expander(patch_x)
-            frame_x = self.frame_expander(frame_x)
+            patch_x_big = patch_x.reshape(T//4,4,C)
+            patch_x_big = torch.mean(patch_x_big,dim=1) 
+            frame_x_big = frame_x.reshape(T//4,4,C)
+            frame_x_big = torch.mean(frame_x_big,dim=1) 
+
+        patch_x = self.patch_expander(patch_x)
+        frame_x = self.frame_expander(frame_x)
+
+        loss_mel_patch = mse_loss(patch_x,patch_mel)
+        loss_mel_frame = mse_loss(frame_x,frame_mel)
 
 
         #p = F.normalize(patch_x, dim=-1)
@@ -97,11 +97,11 @@ class DUAL(nn.Module):
 
         #loss =  2 - 2 * (p * z).sum(dim=1).mean()
 
-        loss = mse_loss(frame_x,patch_x)
-        loss_uniform_patch,std_patch = variance_loss(patch_x.reshape(-1,patch_x.shape[-1]))
-        loss_uniform_frame,std_frame = variance_loss(frame_x.reshape(-1,patch_x.shape[-1]))
+        loss_dual = mse_loss(frame_x_big,patch_x_big)
+        loss_uniform_patch,std_patch = variance_loss(patch_x_big.reshape(-1,patch_x_big.shape[-1]))
+        loss_uniform_frame,std_frame = variance_loss(frame_x_big.reshape(-1,patch_x_big.shape[-1]))
 
-        return loss,loss_uniform_patch,loss_uniform_frame,std_patch,std_frame
+        return loss_mel_patch,loss_mel_frame,loss_dual,loss_uniform_patch,loss_uniform_frame,std_patch,std_frame
     
 
 class DUALLightningModule(LightningModule):
@@ -123,14 +123,16 @@ class DUALLightningModule(LightningModule):
     def training_step(self,batch,batch_idx):
         self.schedule()
         (melspecs_frame,melspecs_patch,lengths,masks_frame,masks_patch),_ = batch
-        loss,loss_uniform_patch,loss_uniform_frame,std_patch,std_frame = self.model(melspecs_frame,melspecs_patch,masks_frame,masks_patch)
-        self.log("loss",loss,prog_bar=True,logger=True)
+        loss_mel_patch,loss_mel_frame,loss_dual,loss_uniform_patch,loss_uniform_frame,std_patch,std_frame = self.model(melspecs_frame,melspecs_patch,masks_frame,masks_patch)
+        self.log("loss_mel_patch",loss_mel_patch,prog_bar=True,logger=True)
+        self.log("loss_mel_frame",loss_mel_frame,prog_bar=True,logger=True)
+        self.log("loss_dual",loss_dual,prog_bar=True,logger=True)
         self.log("loss_uniform_patch",loss_uniform_patch,prog_bar=True,logger=True)
         self.log("loss_uniform_frame",loss_uniform_frame,prog_bar=True,logger=True)
         self.log("std_patch",std_patch,prog_bar=True,logger=True)
         self.log("std_frame",std_frame,prog_bar=True,logger=True)
         self.log("step",self.global_step,prog_bar=True,logger=True)
-        loss = loss+loss_uniform_patch+loss_uniform_frame
+        loss = loss_mel_patch + loss_mel_frame + loss_dual + loss_uniform_patch + loss_uniform_frame
         
         return loss
     def schedule(self):

@@ -41,8 +41,10 @@ class DUALTrainTransform:
         length = length  - length%16
         mel = mel[:,:,:length]
 
-        mel_patch = self.mixup1(mel)
-        mel_frame = self.mixup2(mel)
+        #mel_patch = self.mixup1(mel)
+        #mel_frame = self.mixup2(mel)
+        mel_patch = mel
+        mel_frame = mel
 
 
         num_patches= get_num_patches(height=64,width=length,patch_height=64,patch_width=16)

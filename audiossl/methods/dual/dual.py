@@ -227,7 +227,7 @@ class AST(nn.Module):
                 length_mask = torch.arange(mel_patches.shape[1]).to(x.device) < patch_length.unsqueeze(1)
                 length_mask = length_mask.to(x.device)
             
-            return x
+            return x,mel_patches
 
 
     def get_last_selfattention(self, x):
