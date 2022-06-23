@@ -1,0 +1,24 @@
+{
+    "os": "Linux-5.4.0-104-generic-x86_64-with-debian-bullseye-sid",
+    "python": "3.7.12",
+    "heartbeatAt": "2022-06-22T16:56:49.999130",
+    "startedAt": "2022-06-22T16:56:47.135525",
+    "docker": null,
+    "gpu": "NVIDIA A100-SXM4-80GB",
+    "gpu_count": 8,
+    "cpu_count": 128,
+    "cuda": null,
+    "args": null,
+    "state": "running",
+    "program": "train.py",
+    "codePath": "audiossl/methods/frame_atst/train.py",
+    "git": {
+        "remote": "git@github.com:Audio-WestlakeU/audiossl.git",
+        "commit": "ebaba5bebdcd6a0e3002f4e13d2a5c84ed592607"
+    },
+    "email": "shysian@gmail.com",
+    "root": "/data/home/lixian/audiossl",
+    "host": "ALab02",
+    "username": "lixian",
+    "executable": "/data/home/lixian/anaconda3/envs/torch/bin/python"
+}

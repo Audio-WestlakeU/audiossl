@@ -1,0 +1,187 @@
+2022-06-22 16:56:47,147 INFO    StreamThr :309285 [internal.py:wandb_internal():95] W&B internal server running at pid: 309285, started at: 2022-06-22 16:56:47.146334
+2022-06-22 16:56:47,150 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: status
+2022-06-22 16:56:47,154 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: status
+2022-06-22 16:56:47,155 DEBUG   SenderThread:309285 [sender.py:send():235] send: header
+2022-06-22 16:56:47,156 INFO    WriterThread:309285 [datastore.py:open_for_write():77] open: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/run-jgpag01s.wandb
+2022-06-22 16:56:47,174 DEBUG   SenderThread:309285 [sender.py:send():235] send: run
+2022-06-22 16:56:47,181 INFO    SenderThread:309285 [sender.py:_maybe_setup_resume():493] checking resume status for None/audiossl-audiossl_methods_frame_atst/jgpag01s
+2022-06-22 16:56:48,233 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: check_version
+2022-06-22 16:56:48,235 INFO    SenderThread:309285 [dir_watcher.py:__init__():169] watching files in: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files
+2022-06-22 16:56:48,235 INFO    SenderThread:309285 [sender.py:_start_run_threads():815] run started: jgpag01s with start time 1655917007
+2022-06-22 16:56:48,235 DEBUG   SenderThread:309285 [sender.py:send():235] send: summary
+2022-06-22 16:56:48,235 INFO    SenderThread:309285 [sender.py:_save_file():947] saving file wandb-summary.json with policy end
+2022-06-22 16:56:48,235 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: check_version
+2022-06-22 16:56:48,597 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: run_start
+2022-06-22 16:56:49,239 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_created():217] file/dir created: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-summary.json
+2022-06-22 16:56:49,998 DEBUG   HandlerThread:309285 [meta.py:__init__():37] meta init
+2022-06-22 16:56:49,999 DEBUG   HandlerThread:309285 [meta.py:__init__():51] meta init done
+2022-06-22 16:56:49,999 DEBUG   HandlerThread:309285 [meta.py:probe():211] probe
+2022-06-22 16:56:50,006 DEBUG   HandlerThread:309285 [meta.py:_setup_git():201] setup git
+2022-06-22 16:56:50,103 DEBUG   HandlerThread:309285 [meta.py:_setup_git():208] setup git done
+2022-06-22 16:56:50,104 DEBUG   HandlerThread:309285 [meta.py:_save_pip():55] save pip
+2022-06-22 16:56:50,104 DEBUG   HandlerThread:309285 [meta.py:_save_pip():69] save pip done
+2022-06-22 16:56:50,104 DEBUG   HandlerThread:309285 [meta.py:_save_conda():76] save conda
+2022-06-22 16:56:50,244 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_created():217] file/dir created: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/requirements.txt
+2022-06-22 16:56:50,244 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_created():217] file/dir created: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/conda-environment.yaml
+2022-06-22 16:56:51,006 DEBUG   HandlerThread:309285 [meta.py:_save_conda():86] save conda done
+2022-06-22 16:56:51,006 DEBUG   HandlerThread:309285 [meta.py:probe():249] probe done
+2022-06-22 16:56:51,011 DEBUG   SenderThread:309285 [sender.py:send():235] send: files
+2022-06-22 16:56:51,012 INFO    SenderThread:309285 [sender.py:_save_file():947] saving file wandb-metadata.json with policy now
+2022-06-22 16:56:51,021 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: stop_status
+2022-06-22 16:56:51,022 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: stop_status
+2022-06-22 16:56:51,244 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_created():217] file/dir created: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/output.log
+2022-06-22 16:56:51,244 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_created():217] file/dir created: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-metadata.json
+2022-06-22 16:56:51,597 DEBUG   SenderThread:309285 [sender.py:send():235] send: telemetry
+2022-06-22 16:56:51,598 DEBUG   SenderThread:309285 [sender.py:send():235] send: metric
+2022-06-22 16:56:51,598 DEBUG   SenderThread:309285 [sender.py:send():235] send: telemetry
+2022-06-22 16:56:51,599 DEBUG   SenderThread:309285 [sender.py:send():235] send: metric
+2022-06-22 16:56:51,600 WARNING SenderThread:309285 [sender.py:send_metric():905] Seen metric with glob (shouldnt happen)
+2022-06-22 16:56:52,095 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:52,095 DEBUG   SenderThread:309285 [sender.py:send():235] send: exit
+2022-06-22 16:56:52,095 INFO    SenderThread:309285 [sender.py:send_exit():371] handling exit code: 1
+2022-06-22 16:56:52,095 INFO    SenderThread:309285 [sender.py:send_exit():373] handling runtime: 3
+2022-06-22 16:56:52,096 INFO    SenderThread:309285 [sender.py:_save_file():947] saving file wandb-summary.json with policy end
+2022-06-22 16:56:52,096 INFO    SenderThread:309285 [sender.py:send_exit():379] send defer
+2022-06-22 16:56:52,096 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:52,096 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,096 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 0
+2022-06-22 16:56:52,096 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,097 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 0
+2022-06-22 16:56:52,097 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 1
+2022-06-22 16:56:52,097 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,097 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 1
+2022-06-22 16:56:52,245 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_modified():230] file/dir modified: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-summary.json
+2022-06-22 16:56:52,280 INFO    Thread-16 :309285 [upload_job.py:push():137] Uploaded file /tmp/tmp0offg0lkwandb/17jngvv5-wandb-metadata.json
+2022-06-22 16:56:52,397 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,397 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 1
+2022-06-22 16:56:52,397 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 2
+2022-06-22 16:56:52,398 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:52,399 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,399 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:52,399 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 2
+2022-06-22 16:56:52,399 DEBUG   SenderThread:309285 [sender.py:send():235] send: stats
+2022-06-22 16:56:52,400 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,400 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 2
+2022-06-22 16:56:52,400 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 3
+2022-06-22 16:56:52,400 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,400 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 3
+2022-06-22 16:56:52,400 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,400 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 3
+2022-06-22 16:56:52,400 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 4
+2022-06-22 16:56:52,401 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,401 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 4
+2022-06-22 16:56:52,401 DEBUG   SenderThread:309285 [sender.py:send():235] send: summary
+2022-06-22 16:56:52,401 INFO    SenderThread:309285 [sender.py:_save_file():947] saving file wandb-summary.json with policy end
+2022-06-22 16:56:52,401 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,401 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 4
+2022-06-22 16:56:52,401 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 5
+2022-06-22 16:56:52,401 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,402 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 5
+2022-06-22 16:56:52,402 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,402 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 5
+2022-06-22 16:56:52,501 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:52,901 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 6
+2022-06-22 16:56:52,901 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:52,901 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:52,902 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 6
+2022-06-22 16:56:52,902 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:52,902 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 6
+2022-06-22 16:56:52,903 INFO    SenderThread:309285 [dir_watcher.py:finish():283] shutting down directory watcher
+2022-06-22 16:56:53,003 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,245 INFO    Thread-12 :309285 [dir_watcher.py:_on_file_modified():230] file/dir modified: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/output.log
+2022-06-22 16:56:53,246 INFO    SenderThread:309285 [dir_watcher.py:_on_file_modified():230] file/dir modified: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/config.yaml
+2022-06-22 16:56:53,246 INFO    SenderThread:309285 [dir_watcher.py:_on_file_modified():230] file/dir modified: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-summary.json
+2022-06-22 16:56:53,247 INFO    SenderThread:309285 [dir_watcher.py:finish():313] scan: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files
+2022-06-22 16:56:53,247 INFO    SenderThread:309285 [dir_watcher.py:finish():327] scan save: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/conda-environment.yaml conda-environment.yaml
+2022-06-22 16:56:53,247 INFO    SenderThread:309285 [dir_watcher.py:finish():327] scan save: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/output.log output.log
+2022-06-22 16:56:53,247 INFO    SenderThread:309285 [dir_watcher.py:finish():327] scan save: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/config.yaml config.yaml
+2022-06-22 16:56:53,247 INFO    SenderThread:309285 [dir_watcher.py:finish():327] scan save: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-summary.json wandb-summary.json
+2022-06-22 16:56:53,248 INFO    SenderThread:309285 [dir_watcher.py:finish():327] scan save: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-metadata.json wandb-metadata.json
+2022-06-22 16:56:53,253 INFO    SenderThread:309285 [dir_watcher.py:finish():327] scan save: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/requirements.txt requirements.txt
+2022-06-22 16:56:53,255 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 7
+2022-06-22 16:56:53,255 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,269 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:53,275 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 7
+2022-06-22 16:56:53,275 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:53,276 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 7
+2022-06-22 16:56:53,276 INFO    SenderThread:309285 [file_pusher.py:finish():145] shutting down file pusher
+2022-06-22 16:56:53,370 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,370 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,472 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,472 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,574 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,574 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,675 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,676 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,777 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,777 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,878 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,878 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:53,979 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:53,980 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,080 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,080 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,182 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,183 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,284 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,284 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,385 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,386 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,487 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,488 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,589 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,589 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,691 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,691 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,792 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,793 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,894 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,894 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:54,996 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:54,996 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,097 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:55,098 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,199 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:55,199 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,207 INFO    Thread-20 :309285 [upload_job.py:push():137] Uploaded file /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/requirements.txt
+2022-06-22 16:56:55,232 INFO    Thread-18 :309285 [upload_job.py:push():137] Uploaded file /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/config.yaml
+2022-06-22 16:56:55,237 INFO    Thread-17 :309285 [upload_job.py:push():137] Uploaded file /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/output.log
+2022-06-22 16:56:55,248 INFO    Thread-19 :309285 [upload_job.py:push():137] Uploaded file /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/files/wandb-summary.json
+2022-06-22 16:56:55,300 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:55,301 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,402 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:55,402 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,449 INFO    Thread-11 :309285 [sender.py:transition_state():392] send defer: 8
+2022-06-22 16:56:55,449 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:55,449 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 8
+2022-06-22 16:56:55,449 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:55,450 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 8
+2022-06-22 16:56:55,504 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:55,704 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 9
+2022-06-22 16:56:55,704 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,705 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:55,705 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 9
+2022-06-22 16:56:55,705 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:55,706 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 9
+2022-06-22 16:56:55,706 INFO    SenderThread:309285 [sender.py:transition_state():392] send defer: 10
+2022-06-22 16:56:55,707 DEBUG   SenderThread:309285 [sender.py:send():235] send: final
+2022-06-22 16:56:55,707 DEBUG   SenderThread:309285 [sender.py:send():235] send: footer
+2022-06-22 16:56:55,707 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: defer
+2022-06-22 16:56:55,707 INFO    HandlerThread:309285 [handler.py:handle_request_defer():164] handle defer: 10
+2022-06-22 16:56:55,707 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: defer
+2022-06-22 16:56:55,707 INFO    SenderThread:309285 [sender.py:send_request_defer():388] handle sender defer: 10
+2022-06-22 16:56:55,807 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: poll_exit
+2022-06-22 16:56:55,807 DEBUG   SenderThread:309285 [sender.py:send_request():249] send_request: poll_exit
+2022-06-22 16:56:55,807 INFO    SenderThread:309285 [file_pusher.py:join():150] waiting for file pusher
+2022-06-22 16:56:56,939 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: sampled_history
+2022-06-22 16:56:56,940 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: get_summary
+2022-06-22 16:56:56,940 INFO    MainThread:309285 [wandb_run.py:_footer_history_summary_info():2865] rendering history
+2022-06-22 16:56:56,940 INFO    MainThread:309285 [wandb_run.py:_footer_history_summary_info():2894] rendering summary
+2022-06-22 16:56:56,940 INFO    MainThread:309285 [wandb_run.py:_footer_sync_info():2822] logging synced files
+2022-06-22 16:56:56,941 DEBUG   HandlerThread:309285 [handler.py:handle_request():141] handle_request: shutdown
+2022-06-22 16:56:56,941 INFO    HandlerThread:309285 [handler.py:finish():778] shutting down handler
+2022-06-22 16:56:57,707 INFO    WriterThread:309285 [datastore.py:close():281] close: /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/run-jgpag01s.wandb
+2022-06-22 16:56:57,837 INFO    SenderThread:309285 [sender.py:finish():1078] shutting down sender
+2022-06-22 16:56:57,837 INFO    SenderThread:309285 [file_pusher.py:finish():145] shutting down file pusher
+2022-06-22 16:56:57,838 INFO    SenderThread:309285 [file_pusher.py:join():150] waiting for file pusher
+2022-06-22 16:56:57,944 INFO    MainThread:309285 [internal.py:handle_exit():82] Internal process exited

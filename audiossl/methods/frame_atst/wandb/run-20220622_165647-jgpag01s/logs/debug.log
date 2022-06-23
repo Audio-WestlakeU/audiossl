@@ -1,0 +1,24 @@
+2022-06-22 16:56:47,138 INFO    MainThread:309088 [wandb_setup.py:_flush():75] Loading settings from /data/home/lixian/.config/wandb/settings
+2022-06-22 16:56:47,138 INFO    MainThread:309088 [wandb_setup.py:_flush():75] Loading settings from /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/settings
+2022-06-22 16:56:47,138 INFO    MainThread:309088 [wandb_setup.py:_flush():75] Loading settings from environment variables: {'_require_service': 'True'}
+2022-06-22 16:56:47,138 INFO    MainThread:309088 [wandb_setup.py:_flush():75] Inferring run settings from compute environment: {'program_relpath': 'audiossl/methods/frame_atst/train.py', 'program': 'train.py'}
+2022-06-22 16:56:47,138 INFO    MainThread:309088 [wandb_init.py:_log_setup():405] Logging user logs to /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/logs/debug.log
+2022-06-22 16:56:47,138 INFO    MainThread:309088 [wandb_init.py:_log_setup():406] Logging internal logs to /data/home/lixian/audiossl/audiossl/methods/frame_atst/wandb/run-20220622_165647-jgpag01s/logs/debug-internal.log
+2022-06-22 16:56:47,139 INFO    MainThread:309088 [wandb_init.py:init():439] calling init triggers
+2022-06-22 16:56:47,139 INFO    MainThread:309088 [wandb_init.py:init():443] wandb.init called with sweep_config: {}
+config: {}
+2022-06-22 16:56:47,139 INFO    MainThread:309088 [wandb_init.py:init():492] starting backend
+2022-06-22 16:56:47,141 INFO    MainThread:309088 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2022-06-22 16:56:47,144 INFO    MainThread:309088 [wandb_init.py:init():501] backend started and connected
+2022-06-22 16:56:47,149 INFO    MainThread:309088 [wandb_init.py:init():565] updated telemetry
+2022-06-22 16:56:47,173 INFO    MainThread:309088 [wandb_init.py:init():596] communicating run to backend with 30 second timeout
+2022-06-22 16:56:48,231 INFO    MainThread:309088 [wandb_run.py:_on_init():1759] communicating current version
+2022-06-22 16:56:48,592 INFO    MainThread:309088 [wandb_run.py:_on_init():1763] got version response upgrade_message: "wandb version 0.12.19 is available!  To upgrade, please run:\n $ pip install wandb --upgrade"
+
+2022-06-22 16:56:48,592 INFO    MainThread:309088 [wandb_init.py:init():625] starting run threads in backend
+2022-06-22 16:56:51,017 INFO    MainThread:309088 [wandb_run.py:_console_start():1733] atexit reg
+2022-06-22 16:56:51,018 INFO    MainThread:309088 [wandb_run.py:_redirect():1606] redirect: SettingsConsole.WRAP
+2022-06-22 16:56:51,018 INFO    MainThread:309088 [wandb_run.py:_redirect():1643] Wrapping output streams.
+2022-06-22 16:56:51,021 INFO    MainThread:309088 [wandb_run.py:_redirect():1667] Redirects installed.
+2022-06-22 16:56:51,021 INFO    MainThread:309088 [wandb_init.py:init():664] run started, returning control to user process
+2022-06-22 16:56:57,943 WARNING MsgRouterThr:309088 [router.py:message_loop():76] message_loop has been closed

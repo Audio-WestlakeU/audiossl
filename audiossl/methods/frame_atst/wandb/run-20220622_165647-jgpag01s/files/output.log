@@ -1,0 +1,23 @@
+Traceback (most recent call last):
+  File "train.py", line 49, in <module>
+    main(args)
+  File "train.py", line 18, in main
+    data = FrameATSTDataModule(**dict_args)
+  File "/data/home/lixian/audiossl/audiossl/methods/frame_atst/data.py", line 41, in __init__
+    mask_type=mask_type))
+  File "/data/home/lixian/audiossl/audiossl/datasets/lmdb.py", line 17, in __init__
+    lmdb_path = os.path.join(self.db_path,"train.lmdb")
+  File "/data/home/lixian/anaconda3/envs/torch/lib/python3.7/posixpath.py", line 80, in join
+    a = os.fspath(a)
+TypeError: expected str, bytes or os.PathLike object, not NoneType
+Traceback (most recent call last):
+  File "train.py", line 49, in <module>
+    main(args)
+  File "train.py", line 18, in main
+    data = FrameATSTDataModule(**dict_args)
+  File "/data/home/lixian/audiossl/audiossl/methods/frame_atst/data.py", line 41, in __init__
+    mask_type=mask_type))
+  File "/data/home/lixian/audiossl/audiossl/datasets/lmdb.py", line 17, in __init__
+    lmdb_path = os.path.join(self.db_path,"train.lmdb")
+  File "/data/home/lixian/anaconda3/envs/torch/lib/python3.7/posixpath.py", line 80, in join
+    a = os.fspath(a)
