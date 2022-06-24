@@ -176,6 +176,7 @@ class FrameAST(nn.Module):
         if self.use_cls > 0:
             if self.use_unmask_for_cls:
                 B,T,C = x.shape
+                print(torch.sum(mask_index,dim=1))
                 x_unmasked = x[~mask_index].reshape(B,-1,C)
                 x = x_unmasked
 
@@ -197,13 +198,17 @@ class FrameAST(nn.Module):
 
     def get_last_selfattention(self, x):
         x,_,_,_,_,_ = self.prepare_tokens(x,mask_index=None,length=None,mask=False)
+        atts=[]
         if self.use_cls>0:
             for i, blk in enumerate(self.blocks[:-self.use_cls]):
                 if i < len(self.blocks) - self.use_cls -1:
-                    x = blk(x)
+                    x,att = blk(x,return_attention=True)
+                    atts.append(att)
                 else:
                     # return attention of the last block
-                    return blk(x, return_attention=True)
+                    x,att = blk(x, return_attention=True)
+                    atts.append(att)
+                    return atts
         else:
             for i, blk in enumerate(self.blocks):
                 if i < len(self.blocks) - 1:

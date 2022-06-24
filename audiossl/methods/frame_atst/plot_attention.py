@@ -14,11 +14,11 @@ def plot_spec(x,save_path):
     plt.savefig(save_path)
     plt.close()
 
-def plot_att(attentions,save_path):
-    plot_spec(torch.sum(attentions[0,:,1:,1:],dim=0).cpu().numpy(),os.path.join(save_path,"att_headsum.png"))
+def plot_att(attentions,save_path,name):
+    plot_spec(torch.sum(attentions[0,:,1:,1:],dim=0).cpu().numpy(),os.path.join(save_path,name+"att_headsum.png"))
     for i in range(attentions.shape[1]):
-        plot_spec(attentions[0,i,1:,1:].cpu().numpy(),os.path.join(save_path,"att_head{}.png".format(i)))
-        plt.imsave(fname=os.path.join(save_path,"att_head{}_imsave.png".format(i)),
+        plot_spec(attentions[0,i,1:,1:].cpu().numpy(),os.path.join(save_path,name+"att_head{}.png".format(i)))
+        plt.imsave(fname=os.path.join(save_path,name+"att_head{}_imsave.png".format(i)),
                    arr=attentions[0,i].cpu().numpy(), 
                    format='png')
 
@@ -61,4 +61,7 @@ if __name__ == "__main__":
     os.makedirs(save_path,exist_ok=True)
 
     plot_spec(mel[0].cpu().numpy().transpose(1,0),os.path.join(save_path,"mel.png"))
-    plot_att(att,save_path)
+    print(len(att))
+	
+    for i,att_ in enumerate(att):
+    	plot_att(att_,save_path,name="{}-".format(i))
