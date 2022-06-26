@@ -52,7 +52,8 @@ def mel2att(mel,model):
 
 if __name__ == "__main__":
     import sys
-    ckpt_path,wav_file,save_path=sys.argv[1:]
+    wav_file,ckpt_path=sys.argv[1:]
+    save_path=os.path.dirname(ckpt_path)
     print(ckpt_path,wav_file)
     model = get_pretraied_encoder(ckpt_path)
     mel = wav2mel(wav_file)
