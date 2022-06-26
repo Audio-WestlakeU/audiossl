@@ -28,6 +28,7 @@ class FrameATSTDataModule(LightningDataModule):
                  mask_ratio=0.75,
                  mask_type="block",
                  anchor_len=6.,
+                 mask_len=5,
                  **kwargs,
                  ):
         super().__init__()
@@ -39,6 +40,7 @@ class FrameATSTDataModule(LightningDataModule):
                                                                    mask_ratio=mask_ratio,
                                                                    anchor_len=anchor_len,
                                                                    mask_type=mask_type,
+                                                                   mask_len=mask_len,
                                                                    **kwargs))
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
@@ -65,5 +67,6 @@ class FrameATSTDataModule(LightningDataModule):
         parser.add_argument('--aug_stu', default=True, type=bool_flag, help='whether to augment student view')
         parser.add_argument('--anchor_len',default=6.,type=float,help="length of training samples")
         parser.add_argument('--mask_ratio',default=0.75,type=float,help="masking ratio")
+        parser.add_argument('--mask_len',default=5,type=int,help="masking block length")
         parser.add_argument('--mask_type',default="block",type=str,help="masking type: random or block")
         return parent_parser
