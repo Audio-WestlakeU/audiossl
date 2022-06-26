@@ -212,10 +212,13 @@ class FrameAST(nn.Module):
         else:
             for i, blk in enumerate(self.blocks):
                 if i < len(self.blocks) - 1:
-                    x = blk(x)
+                    x,att = blk(x,return_attention=True)
+                    atts.append(att)
                 else:
+                    x,att = blk(x,return_attention=True)
+                    atts.append(att)
+                    return atts
                     # return attention of the last block
-                    return blk(x, return_attention=True)
 
     def get_intermediate_layers(self, x,length, n=1):
         x,_,_,_,_,patch_length = self.prepare_tokens(x,mask_index=None,length=length,mask=False)
