@@ -1,25 +1,24 @@
 from pytorch_lightning import LightningModule
 from audiossl.methods.frame_atst.prompt_tuning import ClsAST
 from transformers.optimization import AdamW, get_cosine_schedule_with_warmup
-from audiossl.utils.common import cosine_scheduler_step
+from audiossl.utils.common import cosine_scheduler_step,get_params_groups
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch import nn
 from audiossl.models.atst.byol import MultiCropWrapper,ByolLoss
 import torch
 
-def get_params_groups(model,filter="prompts"):
+
+def get_params_groups_custom(model,filter="prompts"):
     regularized = []
     not_regularized = []
     for name, param in model.named_parameters():
         print(name)
         if not param.requires_grad:
             continue
-        if "framemodel" in name:
-            continue
+        #if "framemodel" in name:
+        #    continue
         print(name,"train")
         not_regularized.append(param)
-    for param in not_regularized:
-        print(param.shape)
     return [{'params': regularized}, {'params': not_regularized, 'weight_decay': 0.}]
 
 class ClsPrompt(nn.Module):
