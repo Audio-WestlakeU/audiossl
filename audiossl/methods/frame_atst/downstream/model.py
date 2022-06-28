@@ -1,7 +1,7 @@
 from email.mime import audio
 from pytorch_lightning import LightningModule
 from audiossl.modules.head import LinearHead
-from audiossl.methods.frame_atst import audio_transformer
+from audiossl.methods.frame_atst import audio_transformer,prompt_tuning
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -50,6 +50,57 @@ class PretrainedEncoderPLModule(LightningModule):
         output=torch.stack(output,dim=0)
         output=torch.mean(output,dim=0)
         return output, y
+
+class PretrainedCLsPromptEncoderPLModule(LightningModule):
+    def __init__(self,
+                 pretrained_encoder: prompt_tuning.ClsAST,
+                 chunk_len: float,
+                 n_blocks: int,
+                 avgpool:bool = True):
+        super().__init__()
+        self.encoder = pretrained_encoder
+        self.chunk_len = int((chunk_len * 16000)/160 + 1)
+        self.n_blocks = n_blocks
+        self.avgpool = avgpool
+        self.embed_dim = self.encoder.embed_dim*2*n_blocks
+
+    def forward(self, batch):
+        (mel, length), y = batch
+        chunk_len=601
+        total_len = mel.shape[-1]
+        num_chunks = total_len // chunk_len + 1
+        output_cls=[]
+        output_frame=[]
+        chunk_mark=[]
+        for i in range(num_chunks):
+
+            cur_len = torch.clip(length - i*chunk_len,0,chunk_len)
+            if i==0:
+                chunk_mark_ = cur_len > 0
+            else:
+                chunk_mark_ = cur_len > chunk_len//2
+
+            start = i*chunk_len
+            end = (i+1) * chunk_len
+            if end > total_len:
+                end = total_len
+            if (end>start): #and (length +chunk_len//2  > end):
+                mel_chunk=mel[:,:,:,start:end]
+                len_chunk = mel_chunk.shape[-1] #if length>end+chunk_len else (length - end)
+                len_chunk = torch.tensor([len_chunk]).cuda().expand(mel.shape[0])
+                output_cls_chunk,output_frame_chunk = self.encoder.get_last_n_blocks(mel_chunk,cur_len,n=self.n_blocks)
+
+                output_cls.append(output_cls_chunk)
+                output_frame.append(output_frame_chunk)
+                chunk_mark.append(chunk_mark_)
+        chunk_mark=torch.stack(chunk_mark,dim=0).unsqueeze(-1)
+        output_cls=torch.stack(output_cls,dim=0)
+        output_cls = torch.sum(chunk_mark*output_cls,dim=0)/torch.sum(chunk_mark,dim=0)
+        output_frame=torch.stack(output_frame,dim=0)
+        output_frame = torch.sum(chunk_mark*output_frame,dim=0)/torch.sum(chunk_mark,dim=0)
+        output = torch.cat([output_cls,output_frame],dim=1)
+        return output, y
+
 
 
 class LinearClassifierPLModule(LightningModule):
