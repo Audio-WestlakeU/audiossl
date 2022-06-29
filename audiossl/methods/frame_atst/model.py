@@ -29,6 +29,7 @@ class FrameATST(nn.Module):
                  unmask_for_cls=True,
                  crop_ratio=0.6,
                  avg_blocks=8,
+                 use_mse=0,
                  **kwargs):
         super().__init__()
         if arch == "small":
@@ -41,22 +42,27 @@ class FrameATST(nn.Module):
             raise RuntimeError("arch {} is not implemented".format(arch))
         self.doublehead=use_cls>0
         self.symmetric = symmetric
+        self.use_mse = use_mse
         self.student=MultiCropWrapper(encoder_fn(use_cls=use_cls,
                                                  use_unmask_for_cls=unmask_for_cls,
                                                  crop_ratio=crop_ratio,
                                                  avg_blocks=0,
+                                                 use_mse=use_mse,
                                                  **kwargs),
                                       embed_dim,
                                       predictor=True,
-                                      doublehead=use_cls>0)
+                                      doublehead=use_cls>0,
+                                      use_mse=use_mse)
         self.teacher=MultiCropWrapper(encoder_fn(use_cls=use_cls,
                                                  use_unmask_for_cls=unmask_for_cls,
                                                  crop_ratio=crop_ratio,
                                                  avg_blocks=avg_blocks,
+                                                 use_mse=use_mse,
                                                  **kwargs),
                                       embed_dim,
                                       predictor=False,
-                                      doublehead=use_cls>0)
+                                      doublehead=use_cls>0,
+                                      use_mse=use_mse)
         for p in self.teacher.parameters():
             p.requires_grad = False
         self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "predictor" not in k })
@@ -64,15 +70,25 @@ class FrameATST(nn.Module):
     
     def forward(self,x,length,mask):
         if self.symmetric:
-            tea = self.teacher(x,length,mask,False)
-            stu = self.student(x,length,mask,True)
-            return self.loss_fn(stu,tea)
+            if self.use_mse>0:
+                tea,_ = self.teacher(x,length,mask,False)
+                stu,mse_loss= self.student(x,length,mask,True)
+                return list(self.loss_fn(stu,tea))+[mse_loss]
+            else:
+                tea = self.teacher(x,length,mask,False)
+                stu = self.student(x,length,mask,True)
+                return self.loss_fn(stu,tea)
             #total_loss_frm,total_loss_cls,std_frm_stu,std_frm_tea,std_cls_stu,std_cls_tea =
 
         else:
-            tea = self.teacher(x[:1],length[:1],mask[:1],False)
-            stu = self.student(x[1:],length[1:],mask[1:],True)
-            return self.loss_fn(stu,tea)
+            if self.use_mse>0:
+                tea,_ = self.teacher(x[:1],length[:1],mask[:1],False)
+                stu,mse_loss = self.student(x[1:],length[1:],mask[1:],True)
+                return list(self.loss_fn(stu,tea))+[mse_loss]
+            else:
+                tea = self.teacher(x[:1],length[:1],mask[:1],False)
+                stu = self.student(x[1:],length[1:],mask[1:],True)
+                return self.loss_fn(stu,tea)
             #total_loss_frm,std_frm_stu,std_frm_tea
     def update_teacher(self,m):
         with torch.no_grad():
@@ -99,6 +115,7 @@ class FrameATSTLightningModule(LightningModule):
                  unmask_for_cls=True,
                  crop_ratio=0.6,
                  avg_blocks=8,
+                 use_mse=0,
                  **kwargs,
                  ):
         super().__init__()
@@ -108,6 +125,7 @@ class FrameATSTLightningModule(LightningModule):
                                unmask_for_cls=unmask_for_cls,
                                crop_ratio=crop_ratio,
                                avg_blocks=avg_blocks,
+                               use_mse=use_mse,
                                **kwargs)
         self.learning_rate = learning_rate 
         self.warmup_steps =  warmup_steps
@@ -115,6 +133,7 @@ class FrameATSTLightningModule(LightningModule):
         self.symmetric=symmetric
         self.use_cls=use_cls
         self.doublehead=use_cls>0
+        self.use_mse = use_mse
         self.ema_scheduler= cosine_scheduler_step(ema,1,max_steps,0)
         self.wd_scheduler = cosine_scheduler_step(0.04,0.4,max_steps,0)
         self.mylr_scheduler = cosine_scheduler_step(learning_rate,1e-6,max_steps,warmup_steps)
@@ -136,8 +155,13 @@ class FrameATSTLightningModule(LightningModule):
             self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
             self.log("step",self.global_step,prog_bar=True,logger=True)
         else:
-            total_loss_frm,std_frm_stu,std_frm_tea = self.model(melspecs,lengths,masks)
-            loss = total_loss_frm
+            if self.use_mse>0:
+                total_loss_frm,std_frm_stu,std_frm_tea,mse_loss = self.model(melspecs,lengths,masks)
+                loss = total_loss_frm + mse_loss
+                self.log("loss_mse",mse_loss,prog_bar=True,logger=True)
+            else:
+                total_loss_frm,std_frm_stu,std_frm_tea= self.model(melspecs,lengths,masks)
+                loss = total_loss_frm
             self.log("loss",loss,prog_bar=True,logger=True)
             self.log("loss_frm",total_loss_frm,prog_bar=True,logger=True)
             self.log("std_frm_tea",std_frm_tea,prog_bar=True,logger=True)
@@ -173,6 +197,7 @@ class FrameATSTLightningModule(LightningModule):
         parser.add_argument("--unmask_for_cls",type=bool_flag,default=True,help="whether to use unmasked frames for cls loss")
         parser.add_argument("--crop_ratio",type=float,default=0.6,help="crop ratio of frames for cls loss")
         parser.add_argument("--avg_blocks",type=int,default=8,help="average n blocks of teacher network")
+        parser.add_argument("--use_mse",type=int,default=0,help="values larger than 0 means using mse loss")
         parser.add_argument("--symmetric",type=bool_flag,default=True,help="whether to use symemtric loss")
         parser.add_argument("--learning_rate", default=0.0005, type=float, help="""Learning rate at the end of
             linear warmup (highest LR used during training). The learning rate is linearly scaled

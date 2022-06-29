@@ -78,7 +78,7 @@ class PatchEmbed_v2(nn.Module):
 
 class FrameAST(nn.Module):
     """ Vision Transformer """
-    def __init__(self,use_cls=0,use_unmask_for_cls=True,  crop_ratio=0.6, avg_blocks=8, spec_h=64,spec_w=1001, patch_w=16,patch_h=16, in_chans=1, num_classes=0, embed_dim=768, depth=12,
+    def __init__(self,use_cls=0,use_unmask_for_cls=True,  crop_ratio=0.6, use_mse=0,avg_blocks=8, spec_h=64,spec_w=1001, patch_w=16,patch_h=16, in_chans=1, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0.1, norm_layer=nn.LayerNorm, **kwargs):
         super().__init__()
@@ -99,6 +99,7 @@ class FrameAST(nn.Module):
         self.use_unmask_for_cls= use_unmask_for_cls
         self.crop_ratio=crop_ratio
         self.avg_blocks = avg_blocks
+        self.use_mse=use_mse
 
         if use_cls:
             self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
@@ -114,6 +115,9 @@ class FrameAST(nn.Module):
             for i in range(depth)])
         self.norm_frame = norm_layer(embed_dim)
         self.norm_cls = norm_layer(embed_dim)
+        if self.use_mse>0:
+            self.norm_mse = norm_layer(embed_dim)
+            self.mel_linear = nn.Linear(embed_dim,patch_h*patch_w)
 
 
         trunc_normal_(self.pos_embed, std=.02)
@@ -151,6 +155,10 @@ class FrameAST(nn.Module):
     def forward(self, x, mask_index=None,mask_input=True,length=None):
         x,pos,mel_patches,h,w,patch_length = self.prepare_tokens(x,mask_index,length,mask_input)
 
+        length_mask = torch.arange(mel_patches.shape[1]).to(x.device) < patch_length.unsqueeze(1)
+        length_mask = length_mask.to(x.device)
+        mask_index = mask_index & length_mask
+
         avg_x=[]
         if self.use_cls > 0:
             for i,blk in enumerate(self.blocks[:-self.use_cls]):
@@ -161,6 +169,11 @@ class FrameAST(nn.Module):
         else:
             for i,blk in enumerate(self.blocks):
                 x = blk(x,patch_length)
+                if self.use_mse >0 and self.use_mse==i:
+                    x_mel=self.norm_mse(x)
+                    x_mel=self.mel_linear(x)
+                    mse_loss = F.mse_loss(x_mel[mask_index],mel_patches[mask_index])
+
                 if self.avg_blocks > 0:
                     if i >= len(self.blocks)-self.avg_blocks :
                         avg_x.append(F.instance_norm(x.transpose(1,2)).transpose(1,2))
@@ -169,9 +182,7 @@ class FrameAST(nn.Module):
             frame_repr = avg_x
         else:
             frame_repr = self.norm_frame(x)
-        length_mask = torch.arange(mel_patches.shape[1]).to(x.device) < patch_length.unsqueeze(1)
-        length_mask = length_mask.to(x.device)
-        mask_index = mask_index & length_mask
+
 
         if self.use_cls > 0:
             if self.use_unmask_for_cls:
@@ -193,7 +204,10 @@ class FrameAST(nn.Module):
             return frame_repr[mask_index],cls_repr
 
         else:
-            return frame_repr[mask_index]
+            if self.use_mse>0:
+                return frame_repr[mask_index],mse_loss
+            else: 
+                return frame_repr[mask_index]
         
 
     def get_last_selfattention(self, x):

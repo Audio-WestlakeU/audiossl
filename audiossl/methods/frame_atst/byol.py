@@ -140,10 +140,12 @@ class MultiCropWrapper(nn.Module):
     def __init__(self, encoder,
                  embed_dim, 
                  predictor=True,
-                 doublehead=True):
+                 doublehead=True,
+                 use_mse=0):
         super(MultiCropWrapper, self).__init__()
         # disable layers dedicated to ImageNet labels classification
         self.encoder = encoder
+        self.use_mse = use_mse
         self.doublehead=doublehead
         self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
         if doublehead:
@@ -167,6 +169,8 @@ class MultiCropWrapper(nn.Module):
             return_counts=True,
         )[1], 0)
         start_idx, output_frame, output_cls = 0,torch.empty(0).to(x[0].device),torch.empty(0).to(x[0].device)
+        if self.use_mse>0:
+            mse_loss = []
 
         for end_idx in idx_crops:
             if self.doublehead:
@@ -179,18 +183,30 @@ class MultiCropWrapper(nn.Module):
                 output_frame = torch.cat((output_frame, _out_frame))
                 output_cls = torch.cat((output_cls, _out_cls))
             else:
-                _out_frame = self.encoder(torch.cat(x[start_idx: end_idx]),
+                if self.use_mse >0:
+                    _out_frame,_mse_loss = self.encoder(torch.cat(x[start_idx: end_idx]),
+                                        length=torch.cat(length[start_idx:end_idx]),
+                                        mask_index=torch.cat(mask[start_idx:end_idx]),
+                                        mask_input=mask_input
+                                        )
+                else:
+                    _out_frame = self.encoder(torch.cat(x[start_idx: end_idx]),
                                         length=torch.cat(length[start_idx:end_idx]),
                                         mask_index=torch.cat(mask[start_idx:end_idx]),
                                         mask_input=mask_input
                                         )
                 # accumulate outputs
                 output_frame = torch.cat((output_frame, _out_frame))
+                if self.use_mse>0:
+                    mse_loss.append(_mse_loss)
             start_idx = end_idx
         # Run the head forward on the concatenated features.
         if self.doublehead:
             return self.predictor(self.projector(output_frame)),self.predictor2(self.projector2(output_cls))
         else: 
-            return self.predictor(self.projector(output_frame))
+            if self.use_mse>0:
+                return self.predictor(self.projector(output_frame)), torch.mean(torch.stack(mse_loss))
+            else:
+                return self.predictor(self.projector(output_frame))
 
 
