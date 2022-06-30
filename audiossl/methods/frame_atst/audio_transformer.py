@@ -234,7 +234,7 @@ class FrameAST(nn.Module):
                     return atts
                     # return attention of the last block
 
-    def get_intermediate_layers(self, x,length, n=1):
+    def get_intermediate_layers(self, x,length, n=1, scene=True):
         x,_,_,_,_,patch_length = self.prepare_tokens(x,mask_index=None,length=length,mask=False)
         # we return the output tokens from the `n` last blocks
         output = []
@@ -256,9 +256,12 @@ class FrameAST(nn.Module):
             for i,blk in enumerate(self.blocks):
                 x = blk(x,patch_length)
                 if len(self.blocks) - i <= n :
-                    output.append(torch.mean(self.norm_frame(x),dim=1))
+                    if scene:
+                        output.append(torch.mean(self.norm_frame(x),dim=1))
+                    else:
+                        output.append(self.norm_frame(x))
 
-        return torch.cat(output,dim=1)
+        return torch.cat(output,dim=-1)
 
         
     def get_intermediate_layers_chunks(self, x,length, n=1,  chunk_len=401, avgpool=True):

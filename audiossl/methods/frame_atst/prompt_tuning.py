@@ -37,7 +37,7 @@ class ClsAST(nn.Module):
             return torch.reshape(x[:,:self.nprompt],(B*self.nprompt,C))
 
 
-    def get_last_n_blocks(self,x,length,n):
+    def get_last_n_blocks(self,x,length,n,scene=True):
         x,_,_,_,_,patch_length=self.framemodel.prepare_tokens(x,mask_index=None,length=length,mask=False)
         B,T,C=x.shape
         x = torch.cat([self.prompts.expand(B,-1,-1),x],dim=1)
@@ -50,7 +50,10 @@ class ClsAST(nn.Module):
                     output_cls.append(torch.mean(self.framemodel.norm_frame(x)[:,:self.nprompt],dim=1))
                 else:
                     output_cls.append(torch.reshape(self.framemodel.norm_frame(x)[:,:self.nprompt],B*self.nprompt,C))
-                length_mask = torch.arange(x.shape[1]-self.nprompt).to(x.device) < patch_length.unsqueeze(1)
-                output_frame.append(torch.sum(self.framemodel.norm_frame(x)[:,self.nprompt:]*length_mask.unsqueeze(-1),dim=1)/(patch_length.unsqueeze(-1)+1e-6))
-        return torch.cat(output_cls,dim=1),torch.cat(output_frame,dim=1)
+                if scene:
+                    length_mask = torch.arange(x.shape[1]-self.nprompt).to(x.device) < patch_length.unsqueeze(1)
+                    output_frame.append(torch.sum(self.framemodel.norm_frame(x)[:,self.nprompt:]*length_mask.unsqueeze(-1),dim=1)/(patch_length.unsqueeze(-1)+1e-6))
+                else:
+                    output_frame.append(self.framemodel.norm_frame(x)[:,self.nprompt:])
+        return torch.cat(output_cls,dim=1),torch.cat(output_frame,dim=-1)
 
