@@ -7,12 +7,13 @@ from audiossl import datasets
 from audiossl.lightning.datamodules import (DownstreamDataModule,
                                             get_inmemory_datamodule)
 from audiossl.lightning.utils import EmbeddingExtractor
-from audiossl.methods.atst.model import ATSTLightningModule
-from audiossl.methods.atst.downstream import utils
-from audiossl.methods.atst.downstream.data import collate_fn
-from audiossl.methods.atst.downstream.model import (
-    FineTuningPLModule, PretrainedEncoderPLModule)
-from audiossl.methods.atst.downstream.transform import \
+from audiossl.methods.frame_atst.model import FrameATSTLightningModule
+from audiossl.methods.frame_atst.model_cls import ClsPromptLightningModule
+from audiossl.methods.frame_atst.downstream import utils
+from audiossl.methods.frame_atst.downstream.data import collate_fn
+from audiossl.methods.frame_atst.downstream.model import (
+    FineTuningPLModule, PretrainedEncoderPLModule, PretrainedCLsPromptEncoderPLModule)
+from audiossl.methods.frame_atst.downstream.transform import \
     FreezingTransform, FinetuneTargetTransform, FinetuneTrainTransform, FinetuneEvalTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -20,30 +21,25 @@ from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.profiler import SimpleProfiler
 from copy import deepcopy
 
-
-
 def get_pretraied_encoder(args):
     # get pretrained encoder
     dict_args = vars(args)
 
     s = torch.load(args.pretrained_ckpt_path)
-
-    if 'pytorch-lightning_version' in s.keys():
-        pretrained_model = ATSTLightningModule.load_from_checkpoint(
+    if 'nprompt' in s['hyper_parameters']:
+        pretrained_model = ClsPromptLightningModule.load_from_checkpoint(
             args.pretrained_ckpt_path)
         pretrained_encoder = pretrained_model.model.teacher.encoder
+        return pretrained_encoder
+
+
     else:
-        from audiossl.methods.atst.downstream.utils import \
-            load_pretrained_weights
-        from audiossl.models.atst.audio_transformer import AST_base, AST_small
-        load_args = torch.load(args.pretrained_ckpt_path, map_location="cpu")["args"]
-        if load_args.arch=="ast":
-            pretrained_encoder = AST_small()
-        else:
-            pretrained_encoder = AST_base()
-        load_pretrained_weights(
-            pretrained_encoder, pretrained_weights=args.pretrained_ckpt_path, checkpoint_key="teacher")
+        pretrained_model = FrameATSTLightningModule.load_from_checkpoint(
+            args.pretrained_ckpt_path)
+
+        pretrained_encoder = pretrained_model.model.teacher.encoder
     return pretrained_encoder
+
 
 
 def run(args, pretrained_module, fold=None):
@@ -144,7 +140,12 @@ def main():
 
     """load pretrained encoder"""
     pretrained_encoder = get_pretraied_encoder(args)
-    pretrained_module = PretrainedEncoderPLModule(pretrained_encoder,
+    if hasattr(pretrained_encoder,"nprompt"):
+        pretrained_module = PretrainedCLsPromptEncoderPLModule(pretrained_encoder,
+                                                        6.,
+                                                        args.n_last_blocks)
+    else:
+        pretrained_module = PretrainedEncoderPLModule(pretrained_encoder,
                                                         6.,
                                                         args.n_last_blocks)
     pretrained_module.unfreeze()
