@@ -10,7 +10,7 @@ import pyarrow as pa
 
 import torch.utils.data as data
 from torch.utils.data import DataLoader
-from assl import dataset
+import dataset
 import numpy as np
 
 def dumps_pyarrow(obj):
