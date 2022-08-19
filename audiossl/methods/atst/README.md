@@ -21,7 +21,7 @@ finetuning, and 94.3% versus 80.8% after finetuning.
 
 
 
-The full paper can be found in the preprint https://arxiv.org/abs/2204.12076
+The paper has been accepted by INTERSPEECH2022, and can be found in arxiv https://arxiv.org/abs/2204.12076
 
 ## Install
 -------------------------
@@ -52,7 +52,7 @@ See [docs/data_prep.md](docs/data_prep.md)
 
     2. modify data path in eval_{task}.sh 
 
-    3. modify enviroment in eval_env.sh
+    3. modify enviroment in eval_env.sh 
 
     4. run eval_batch.sh ${checkpoint_file_path}
 
@@ -64,7 +64,7 @@ See [docs/data_prep.md](docs/data_prep.md)
 
     2. modify data path in eval_{task}.sh 
 
-    3. modify enviroment in eval_env.sh
+    3. modify enviroment in eval_env.sh (Note batch_size_per_gpu * nproc should equal to 512 to replicate the results in our paper)
 
     4. run eval_batch.sh ${checkpoint_file_path}
 
