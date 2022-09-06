@@ -2,13 +2,13 @@ from fairseq.data.data_utils import compute_mask_indices
 import torch
 from torch.nn import functional as F
 
-def get_mask(batch_size,num_patches,mask_ratio,padding_mask=None,no_overlap=True,min_length=5):
+def get_mask(batch_size,num_patches,mask_ratio,padding_mask=None,no_overlap=True,min_length=5,type="static",other=0):
     masks = compute_mask_indices(shape = (batch_size,num_patches),
                         padding_mask=padding_mask,
                         mask_prob=mask_ratio,
                         mask_length=min_length,
-                        mask_type="static",
-                        mask_other=None,
+                        mask_type=type,
+                        mask_other=other,
                         min_masks=2,
                         no_overlap=no_overlap,
                         min_space=0)
