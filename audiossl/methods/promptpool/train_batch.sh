@@ -1,0 +1,7 @@
+bash train_clsprompt.sh ~/dataset/audioset /mnt/v100_data/lixian/models/side_run_20220627/use_cls0unmask_for_clsFalsecrop_ratio0.6symmetricTrueaug_teaFalseaug_stuTruemask_ratio0.65mask_typeblockavg_blocks0_patch_h16patch_w16_mask_len12/last.ckpt /mnt/v100_data/lixian/models/side_run_20220629/cls_train_patch16_16
+
+for i in `seq 1 10`
+do
+bash train_clsprompt.sh ~/dataset/audioset /mnt/v100_data/lixian/models/side_run_20220627/use_cls0unmask_for_clsFalsecrop_ratio0.6symmetricTrueaug_teaFalseaug_stuTruemask_ratio0.65mask_typeblockavg_blocks0_patch_h16patch_w16_mask_len12/last.ckpt /mnt/v100_data/lixian/models/side_run_last_${i}/cls_train_patch16_16
+
+then
