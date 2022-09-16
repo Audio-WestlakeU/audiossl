@@ -180,7 +180,7 @@ def create_data_source(mode):
     return TaskDataSource(mode)
 
 class Nsynth(Dataset):
-    def __init__(self,path,split="train",sr=16000,transform=None):
+    def __init__(self,path,split="train",sr=16000,transform=None,return_key=False):
         df = read_task_df('nsynth', path)
         indexs = df[df.split == split].index.values
         self.file_names=df.file_name.values[indexs]
@@ -189,6 +189,7 @@ class Nsynth(Dataset):
         self.path = path
         self.sr=sr
         self.transform=transform
+        self.return_key = return_key
     def __getitem__(self,index):
         file_name = self.file_names[index]
         label = self.labels[index]
@@ -197,15 +198,19 @@ class Nsynth(Dataset):
             raise "sampling rate {} is expected, while {} is given".format(
                 self.sr, sr)
         if self.transform is not None:
+            if self.return_key:
+                return self.transform(waveform),label,file_name
             return self.transform(waveform),label
         else:
+            if self.return_key:
+                return waveform,label,file_name
             return waveform,label
 
     def __len__(self):
         return len(self.file_names)
 
 class Urbansound8k(Dataset):
-    def __init__(self,path,split="train",valid_fold=10,sr=16000,transform=None):
+    def __init__(self,path,split="train",valid_fold=10,sr=16000,transform=None,return_key=False):
 
         df = read_task_df('us8k', path)
         # add fold column
@@ -228,6 +233,7 @@ class Urbansound8k(Dataset):
         self.path = path
         self.sr=sr
         self.transform=transform
+        self.return_key = return_key
     def __getitem__(self,index):
         file_name = self.file_names[index]
         label = self.labels[index]
@@ -236,8 +242,12 @@ class Urbansound8k(Dataset):
             raise "sampling rate {} is expected, while {} is given".format(
                 self.sr, sr)
         if self.transform is not None:
+            if self.return_key:
+                return self.transform(waveform),label,file_name
             return self.transform(waveform),label
         else:
+            if self.return_key:
+                return waveform,label,file_name
             return waveform,label
 
     def __len__(self):

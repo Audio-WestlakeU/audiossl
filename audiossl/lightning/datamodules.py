@@ -29,6 +29,7 @@ class DownstreamDataModule(LightningDataModule):
                  collate_fn=None,
                  limit_batch_size=None,
                  shuffle = True,
+                 return_key = False,
                  **kwargs
                  ):
         super().__init__()
@@ -48,30 +49,36 @@ class DownstreamDataModule(LightningDataModule):
                                                       "train",
                                                       fold,
                                                       transforms[0],
-                                                      target_transform=target_transforms[0])
+                                                      target_transform=target_transforms[0],
+                                                      return_key=return_key)
             self.dataset_val = dataset_info.creator(data_path,
                                                       "valid",
                                                       fold,
                                                       transforms[1],
-                                                      target_transform=target_transforms[1])
+                                                      target_transform=target_transforms[1],
+                                                      return_key=return_key)
             self.dataset_test = dataset_info.creator(data_path,
                                                       "test",
                                                       fold,
                                                       transforms[2],
-                                                      target_transform=target_transforms[2])
+                                                      target_transform=target_transforms[2],
+                                                      return_key=return_key)
         else:
             self.dataset_train = dataset_info.creator(data_path,
                                                       "train",
                                                       transforms[0],
-                                                      target_transform=target_transforms[0])
+                                                      target_transform=target_transforms[0],
+                                                      return_key=return_key)
             self.dataset_val = dataset_info.creator(data_path,
                                                       "valid",
                                                       transforms[1],
-                                                      target_transform=target_transforms[1])
+                                                      target_transform=target_transforms[1],
+                                                      return_key=return_key)
             self.dataset_test = dataset_info.creator(data_path,
                                                       "test",
                                                       transforms[2],
-                                                      target_transform=target_transforms[2])
+                                                      target_transform=target_transforms[2],
+                                                      return_key=return_key)
         self.save_hyperparameters()
     def prepare_data(self):
         pass
