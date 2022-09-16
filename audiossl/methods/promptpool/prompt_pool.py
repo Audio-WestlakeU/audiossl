@@ -16,46 +16,57 @@ def get_pretraied_encoder(pretrained_ckpt_path):
     return pretrained_encoder
 
 class PromptPoolAST(nn.Module):
-    def __init__(self,framemodel:FrameAST,pool="mean",nprompt=12,prompt_len=2,query_dim=768,select_num=3):
+    def __init__(self,framemodel:FrameAST,pool_size=12,prompt_key=None,prompt_len=2,select_num=3,pool="mean"):
         super().__init__()
         self.framemodel = framemodel
-        self.nprompt=nprompt
+        self.pool_size=pool_size
         self.pool=pool
-        self.query_dim=query_dim
-        self.prompt_pool = nn.Parameter(torch.zeros(nprompt, prompt_len, self.framemodel.embed_dim))
-        self.prompt_keys = nn.Parameter(torch.zeros(nprompt,self.query_dim))
+        self.prompt_pool = nn.Parameter(torch.zeros(self.pool_size, prompt_len, self.framemodel.embed_dim))
+        self.prompt_keys = nn.Parameter(prompt_key,requires_grad=False)
+        self.prompt_hgram = nn.Parameter(torch.ones(self.pool_size,dtype=torch.float32),requires_grad=False)
         self.select_num = select_num
-        self.embed_dim=self.framemodel.embed_dim if self.pool=="mean" else self.nprompt*self.framemodel.embed_dim 
-        trunc_normal_(self.prompts, std=.02)
+        self.embed_dim=self.framemodel.embed_dim if self.pool=="mean" else self.select_num*prompt_len*self.framemodel.embed_dim 
+        trunc_normal_(self.prompt_pool, std=.02)
+        #trunc_normal_(self.prompt_keys, std=.02)
+
     def forward(self,x,length,query,avg=None):
         x,_,_,_,_,patch_length=self.framemodel.prepare_tokens(x,mask_index=None,length=length,mask=False)
         B,T,C=x.shape
-        prompts = self.prompt_select(query)
-        nprompt = prompts.shape[0]
-        x = torch.cat([prompts.expand(B,-1,-1),x],dim=1)
+        prompts,sim = self.prompt_select(query)
+        nprompt = prompts.shape[1]
+        x = torch.cat([prompts,x],dim=1)
         for i,blk in enumerate(self.framemodel.blocks):
             x = blk(x,patch_length+nprompt)
         x=self.framemodel.norm_frame(x)
         if self.pool=="mean":
-            return torch.mean(x[:,:nprompt],dim=1)
+            return torch.mean(x[:,:nprompt],dim=1),sim
         else:
-            return torch.reshape(x[:,:nprompt],(B*nprompt,C))
+            return torch.reshape(x[:,:nprompt],(B*nprompt,C)),sim
 
 
-    def prompt_select(self,query): # query: 1*h
-        top_keys = torch.topk(torch.nn.CosineSimilarity()(query,self.prompt_keys),self.select_num)
-        prompts = self.prompt_pool[top_keys.indices]
-        prompts = prompts.reshape(-1,prompts.shape[-1])
-        return prompts
+
+    def prompt_select(self,query,diverse=False): # query: 1*h
+        prompts=[]
+        sims=[]
+        for q in query:
+            sim = torch.nn.CosineSimilarity()(q,self.prompt_keys)
+            #top_keys = torch.topk(sim*self.prompt_hgram/torch.sum(self.prompt_hgram),self.select_num)
+            top_keys = torch.topk(sim,self.select_num)
+            self.prompt_hgram[top_keys.indices] += 1
+            prompts_ = self.prompt_pool[top_keys.indices]
+            prompts.append(prompts_)
+            sims.append(sim[top_keys.indices])
+        prompts = torch.stack(prompts,dim=0)
+        prompts = prompts.reshape(prompts.shape[0],-1,prompts.shape[-1])
+        return prompts,torch.mean(torch.cat(sims))
 
 
     def get_last_n_blocks(self,x,length, query, n,scene=True):
         x,_,_,_,_,patch_length=self.framemodel.prepare_tokens(x,mask_index=None,length=length,mask=False)
         B,T,C=x.shape
-        x = torch.cat([self.prompts.expand(B,-1,-1),x],dim=1)
-        prompts = self.prompt_select(query)
-        nprompt = prompts.shape[0]
-        x = torch.cat([prompts.expand(B,-1,-1),x],dim=1)
+        prompts,_ = self.prompt_select(query)
+        nprompt = prompts.shape[1]
+        x = torch.cat([prompts,x],dim=1)
         output_cls=[]
         output_frame=[]
         for i,blk in enumerate(self.framemodel.blocks):

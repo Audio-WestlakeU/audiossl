@@ -15,7 +15,8 @@ class ClsPromptDataModule(LightningDataModule):
         self.dataset=LMDBDataset(data_path,
                                  split="train",
                                  subset=subset,
-                                 transform=ClsPromptTrainTransform())
+                                 transform=ClsPromptTrainTransform()
+                                 )
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
         self.save_hyperparameters()
