@@ -7,18 +7,20 @@ from audiossl import datasets
 from audiossl.lightning.datamodules import (DownstreamDataModule,
                                             get_inmemory_datamodule)
 from audiossl.lightning.utils import EmbeddingExtractor
-from audiossl.methods.frame_atst.model import FrameATSTLightningModule
-from audiossl.methods.frame_atst.model_cls import ClsPromptLightningModule
-from audiossl.methods.frame_atst.downstream import utils
-from audiossl.methods.frame_atst.downstream.data import collate_fn
-from audiossl.methods.frame_atst.downstream.model import (
-    LinearClassifierPLModule, PretrainedEncoderPLModule, PretrainedCLsPromptEncoderPLModule)
-from audiossl.methods.frame_atst.downstream.transform import \
+from audiossl.methods.promptpool.model import FrameATSTLightningModule
+from audiossl.methods.promptpool.model_promptpool import PromptPoolLightningModule
+from audiossl.methods.promptpool.model_cls import ClsPromptLightningModule
+from audiossl.methods.promptpool.downstream import utils
+from audiossl.methods.promptpool.downstream.data import collate_fn
+from audiossl.methods.promptpool.downstream.model import (
+    LinearClassifierPLModule, PretrainedEncoderPLModule, PretrainedCLsPromptEncoderPLModule, PretrainedPromptPoolEncoderPLModule)
+from audiossl.methods.promptpool.downstream.transform import \
     FreezingTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.profiler import SimpleProfiler
+from audiossl.methods.promptpool.downstream.query import extract_queries
 
 
 
@@ -27,7 +29,12 @@ def get_pretraied_encoder(args):
     dict_args = vars(args)
 
     s = torch.load(args.pretrained_ckpt_path)
-    if 'nprompt' in s['hyper_parameters']:
+    if 'pool_size' in s['hyper_parameters']:
+        pretrained_model = PromptPoolLightningModule.load_from_checkpoint(
+            args.pretrained_ckpt_path)
+        pretrained_encoder = pretrained_model.model.teacher.encoder
+        return pretrained_encoder
+    elif 'nprompt' in s['hyper_parameters']:
         pretrained_model = ClsPromptLightningModule.load_from_checkpoint(
             args.pretrained_ckpt_path)
         pretrained_encoder = pretrained_model.model.teacher.encoder
@@ -64,7 +71,7 @@ def extract_embedding(pretrained_module, data, nproc):
     return x_train, y_train, x_val, y_val, x_test, y_test
 
 
-def run(args, pretrained_module, fold=None):
+def run(args, pretrained_module:PretrainedPromptPoolEncoderPLModule, fold=None):
     dict_args = vars(args)
 
     """extract embedding"""
@@ -73,7 +80,26 @@ def run(args, pretrained_module, fold=None):
                                 fold=fold,
                                 collate_fn=collate_fn,
                                 transforms=[transform]*3,
-                                limit_batch_size=min(512,args.batch_size_per_gpu))
+                                limit_batch_size=min(512,args.batch_size_per_gpu),
+                                return_key=True)
+
+    ###########################
+    # query hack
+    queries,queries_train = extract_queries("/data/home/lixian/audiossl/ckpts/base.ckpt",data,1)
+    prompt_keys = pretrained_module.encoder.prompt_keys
+    """
+    sim=torch.nn.CosineSimilarity()(query,prompt_keys)
+    top=torch.topk(sim,pretrained_module.encoder.select_num)
+    print("=select=====================================")
+    print(top.indices)
+    prin"t("======================================")
+    """
+
+    pretrained_module.queries = queries
+    pretrained_module.queries_train = queries_train
+    ###############################
+    
+
     x_train, y_train, x_val, y_val, x_test, y_test = extract_embedding(pretrained_module,
                                                                        data,
                                                                        args.nproc)
@@ -149,7 +175,11 @@ def main():
     parser = ArgumentParser("LinearClassifier")
     #parser = Trainer.add_argparse_args(parser)
 
+    from audiossl.utils.common import bool_flag
+
+
     parser.add_argument("--n_last_blocks", type=int, default=12)
+    parser.add_argument("--samplewise_query", type=bool_flag, default=False)
     parser.add_argument("--pretrained_ckpt_path", type=str)
     parser.add_argument("--save_path", type=str)
     parser.add_argument('--nproc', type=int,  default=1)
@@ -163,7 +193,14 @@ def main():
 
     """load pretrained encoder"""
     pretrained_encoder = get_pretraied_encoder(args)
-    if hasattr(pretrained_encoder,"nprompt"):
+
+    if hasattr(pretrained_encoder,"pool_size"):
+        pretrained_module = PretrainedPromptPoolEncoderPLModule(pretrained_encoder,
+                                                        None,
+                                                        6.,
+                                                        args.n_last_blocks,
+                                                        samplewise_query=args.samplewise_query)
+    elif hasattr(pretrained_encoder,"nprompt"):
         pretrained_module = PretrainedCLsPromptEncoderPLModule(pretrained_encoder,
                                                         6.,
                                                         args.n_last_blocks)
