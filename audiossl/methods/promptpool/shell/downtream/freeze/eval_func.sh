@@ -8,7 +8,8 @@ eval()
         local data_path=$4
         local pretrained_ckpt_path=$5
         local lr=$6
-        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}
+	local samplewise_query=$7
+        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_samplewisequery_${samplewise_query}
         
         local log=$save_path/verbose.txt
         
@@ -38,6 +39,7 @@ eval()
                       --data_path $data_path\
                       --pretrained_ckpt_path $pretrained_ckpt_path\
                       --learning_rate $lr\
+		      --samplewise_query $smaplewise_query\
                       --save_path $save_path 
 	    
             exit
@@ -62,6 +64,7 @@ eval()
                       --data_path $data_path\
                       --pretrained_ckpt_path $pretrained_ckpt_path\
                       --learning_rate $lr\
+		      --samplewise_query $samplewise_query\
                       --save_path $save_path > $log 2>&1
 }
 
