@@ -29,8 +29,8 @@ class PromptPoolAST(nn.Module):
         trunc_normal_(self.prompt_pool, std=.02)
         #trunc_normal_(self.prompt_keys, std=.02)
 
-    def forward(self,x,length,query,avg=None):
-        x,_,_,_,_,patch_length=self.framemodel.prepare_tokens(x,mask_index=None,length=length,mask=False)
+    def forward(self,x,length,query,mask_index,mask_input,avg=None):
+        x,_,mel_patches,_,_,patch_length=self.framemodel.prepare_tokens(x,mask_index=mask_index,length=length,mask=mask_input)
         B,T,C=x.shape
         prompts,sim = self.prompt_select(query)
         nprompt = prompts.shape[1]
@@ -38,10 +38,18 @@ class PromptPoolAST(nn.Module):
         for i,blk in enumerate(self.framemodel.blocks):
             x = blk(x,patch_length+nprompt)
         x=self.framemodel.norm_frame(x)
+
+        frame_repr = x[:,nprompt:] 
+        if mask_index is not None: 
+            length_mask = torch.arange(mel_patches.shape[1]).to(x.device) < patch_length.unsqueeze(1)
+            length_mask = length_mask.to(x.device)
+            mask_index = mask_index & length_mask
+            frame_repr = frame_repr[mask_index]
+
         if self.pool=="mean":
-            return torch.mean(x[:,:nprompt],dim=1),sim
+            return torch.mean(x[:,:nprompt],dim=1),frame_repr
         else:
-            return torch.reshape(x[:,:nprompt],(B*nprompt,C)),sim
+            return torch.reshape(x[:,:nprompt],(B*nprompt,C)),frame_repr
 
 
 

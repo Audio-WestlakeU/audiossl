@@ -46,6 +46,7 @@ class PromptPoolDataModule(LightningDataModule):
     def __init__(self,
                  queries,
                  data_path=None,
+                 transform=None,
                  batch_size_per_gpu=256,
                  num_workers=10,
                  subset=200000,
@@ -56,10 +57,10 @@ class PromptPoolDataModule(LightningDataModule):
                                  queries=queries,
                                  split="train",
                                  subset=subset,
-                                 transform=ClsPromptTrainTransform())
+                                 transform=transform)
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
-        self.save_hyperparameters(ignore=['queries'])
+        self.save_hyperparameters(ignore=['queries','transform'])
     
 
     def train_dataloader(self):

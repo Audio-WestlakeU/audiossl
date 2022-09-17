@@ -1,3 +1,4 @@
+from tkinter import W
 from pytorch_lightning import LightningModule
 from audiossl.methods.promptpool.prompt_pool import PromptPoolAST
 from transformers.optimization import AdamW, get_cosine_schedule_with_warmup
@@ -6,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch import nn
 from audiossl.models.atst.byol import ByolLoss,build_mlp
 import torch
-from audiossl.methods.promptpool.audio_transformer import FrameAST_small
+from audiossl.methods.promptpool.audio_transformer import FrameAST_base, FrameAST_small
 
 
 def get_params_groups_custom(model,filter="prompts"):
@@ -22,65 +23,54 @@ def get_params_groups_custom(model,filter="prompts"):
         not_regularized.append(param)
     return [{'params': regularized}, {'params': not_regularized, 'weight_decay': 0.}]
 
-class MultiCropWrapper(nn.Module):
-    """
-    Perform forward pass separately on each resolution input.
-    The inputs corresponding to a single resolution are clubbed and single
-    forward is run on the same resolution inputs. Hence we do several
-    forward passes = number of different resolutions used. We then
-    concatenate all the output features and run the head forward on these
-    concatenated features.
-    """
+class ModelWrapper(nn.Module):
+
     def __init__(self, encoder,
                  embed_dim, 
+                 train_mode,
                  predictor=True):
-        super(MultiCropWrapper, self).__init__()
+        super(ModelWrapper, self).__init__()
         # disable layers dedicated to ImageNet labels classification
         self.encoder = encoder
+        self.train_mode = train_mode
         self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
         if predictor:
             self.predictor=build_mlp(2,256,4096,256,last_bn=False)
         else: 
             self.predictor=nn.Identity()
 
-    def forward(self, x, length, query, avg=False):
-        # convert to list
-        if not isinstance(x, list):
-            x = [x]
-        idx_crops = torch.cumsum(torch.unique_consecutive(
-            torch.tensor([inp.shape[-1] for inp in x]),
-            return_counts=True,
-        )[1], 0)
-        start_idx, output = 0,torch.empty(0).to(x[0].device)
-        sim = 0
+    def forward(self, x, length, query,mask_index=None,mask_input=False, avg=False):
+        cls_repr,frm_repr = self.encoder(torch.cat(x),
+                                        length=torch.cat(length),
+                                        query=torch.cat(query),
+                                        mask_index=None if mask_index is None else torch.cat(mask_index),
+                                        mask_input=mask_input,
+                                        avg=avg)
 
-        for end_idx in idx_crops:
-            _out, _sim = self.encoder(torch.cat(x[start_idx: end_idx]),
-                                          length=torch.cat(length[start_idx:end_idx]),
-                                          query=torch.cat(query[start_idx:end_idx]),
-                                          avg=avg)
-            # accumulate outputs
+        if self.train_mode == "frame":
+            return self.predictor(self.projector(frm_repr))
+        elif self.train_mode == "cls":
+            return self.predictor(self.projector(cls_repr))
+        else:
+            raise NotImplementedError
 
-            output = torch.cat((output, _out))
-            sim += _sim
-            start_idx = end_idx
-        # Run the head forward on the concatenated features.
-        return self.predictor(self.projector(output)),sim
+
+
 
 
 
 class PromptPool(nn.Module):
-    def __init__(self,framemodel,pool_size,prompt_len,select_num,prompt_key,pool):
+    def __init__(self,arch,train_mode,pool_size,prompt_len,select_num,prompt_key,pool):
         super().__init__()
+        self.train_mode = train_mode
         encoder_fn=PromptPoolAST
-
-        self.framemodel = FrameAST_small()
+        ast_fn = FrameAST_small if arch=="small" else FrameAST_base
 
         
 
         self.pool_size=pool_size
         self.pool=pool
-        student=encoder_fn(self.framemodel,
+        student=encoder_fn(ast_fn(),
                            pool_size=pool_size,
                            prompt_len=prompt_len,
                            select_num=select_num,
@@ -89,28 +79,42 @@ class PromptPool(nn.Module):
         self.embed_dim= student.framemodel.embed_dim if self.pool == "mean" else self.pool_size*student.framemodel.embed_dim 
 
 
-        self.student=MultiCropWrapper(student,
-                                      self.embed_dim,
-                                      predictor=True
+        self.student=ModelWrapper(student,
+                                  self.embed_dim,
+                                  self.train_mode,
+                                  predictor=True
                                       )
                 
-        self.teacher=MultiCropWrapper(encoder_fn(FrameAST_small(),
-                                                 pool_size=pool_size,
-                                                 prompt_len=prompt_len,
-                                                 select_num=select_num,
-                                                 prompt_key=prompt_key,
-                                                 pool=pool),
-                                      self.embed_dim,
-                                      predictor=False
+        self.teacher=ModelWrapper(encoder_fn(ast_fn(),
+                                            pool_size=pool_size,
+                                            prompt_len=prompt_len,
+                                            select_num=select_num,
+                                            prompt_key=prompt_key,
+                                            pool=pool),
+                                  self.embed_dim,
+                                  self.train_mode,
+                                  predictor=False
                                       )
         for p in self.teacher.parameters():
             p.requires_grad = False
-        self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "predictor" not in k })
+        
+        self._init_teacher()
+
         self.loss_fn = ByolLoss(2)
-    def forward(self,x,length,query):
-        stu,sim=self.student(x,length,query)
-        tea,_=self.teacher(x,length,query)
-        return self.loss_fn(stu,tea),1-sim
+
+    def _init_teacher(self):
+        self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "predictor" not in k })
+
+    def forward(self,x,length,query,mask_index=None):
+        if self.train_mode=="cls":
+            stu=self.student(x,length,query)
+            tea=self.teacher(x,length,query)
+        elif self.train_mode=="frame":
+            stu=self.student(x,length,query,mask_index,True)
+            tea=self.teacher(x,length,query,mask_index,False)
+        else:
+            raise NotImplementedError
+        return self.loss_fn(stu,tea)
 
     def update_teacher(self,m):
         with torch.no_grad():
@@ -122,7 +126,8 @@ class PromptPool(nn.Module):
 
 class PromptPoolLightningModule(LightningModule):
     def __init__(self,
-                 framemodel,
+                 arch,
+                 train_mode,
                  prompt_key,
                  pool_size=3,
                  prompt_len=2,
@@ -135,7 +140,8 @@ class PromptPoolLightningModule(LightningModule):
                  **kwargs,
                  ):
         super().__init__()
-        self.model = PromptPool(framemodel,pool_size,prompt_len,select_num,prompt_key,pool)
+        self.model = PromptPool(arch,train_mode,pool_size,prompt_len,select_num,prompt_key,pool)
+        self.train_mode = train_mode
         self.learning_rate = learning_rate 
         self.warmup_steps =  warmup_steps
         self.max_steps = max_steps
@@ -145,14 +151,19 @@ class PromptPoolLightningModule(LightningModule):
         self.save_hyperparameters()
     def training_step(self,batch,batch_idx):
         self.schedule()
-        (melspecs,lengths),query,_ = batch
-        (byol_loss,std_cls_s,std_cls_t),sim_loss = self.model(melspecs,lengths,query)
-        loss = byol_loss #+ sim_loss 
+        if self.train_mode == "cls":
+            (melspecs,lengths),query,_ = batch
+            byol_loss,std_s,std_t= self.model(melspecs,lengths,query)
+        elif self.train_mode == "frame":
+            (melspecs,lengths,masks),query,_ = batch
+            byol_loss,std_s,std_t= self.model(melspecs,lengths,query,masks)
+        else:
+            raise NotImplementedError
+        loss = byol_loss 
         self.log("loss",loss,prog_bar=True,logger=True)
         self.log("byol_loss",byol_loss,prog_bar=True,logger=True)
-        self.log("sim_loss",sim_loss,prog_bar=True,logger=True)
-        self.log("std_cls_t",std_cls_t,prog_bar=True,logger=True)
-        self.log("std_cls_s",std_cls_s,prog_bar=True,logger=True)
+        self.log("std_t",std_t,prog_bar=True,logger=True)
+        self.log("std_s",std_s,prog_bar=True,logger=True)
         self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
         self.log("step",self.global_step,prog_bar=True,logger=True)
         
@@ -180,7 +191,7 @@ class PromptPoolLightningModule(LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("ClsPromptModel")
-        parser.add_argument("--framemodel",type=str,help="""path of frame model checkpoint""")
+        parser.add_argument("--arch",type=str,default="small")
         parser.add_argument("--pool_size",type=int,default=12)
         parser.add_argument("--prompt_len",type=int,default=2)
         parser.add_argument("--select_num",type=int,default=3)

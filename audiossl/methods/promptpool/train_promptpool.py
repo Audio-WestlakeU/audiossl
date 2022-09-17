@@ -10,6 +10,9 @@ from query import extract_queries,QueryDataModule,kmeans_cosine
 import torch
 import os
 from fast_pytorch_kmeans import KMeans
+from transform import FrameATSTTrainTransform
+
+from transform_cls import ClsPromptTrainTransform
 
     
 
@@ -42,7 +45,13 @@ def main(args):
     else:
         queries,c = query_()
 
-    data = PromptPoolDataModule(queries=queries,**dict_args)
+    transform = None
+    if args.train_mode=="cls":
+        transform = ClsPromptTrainTransform()
+    else:
+        transform = FrameATSTTrainTransform()
+
+    data = PromptPoolDataModule(queries=queries,transform=transform,**dict_args)
     model = PromptPoolLightningModule(prompt_key=c.cpu(),**dict_args)                            
     trainer:Trainer = Trainer(
                             strategy="ddp",
@@ -59,6 +68,14 @@ def main(args):
                                       ],
                             )
     last_ckpt = os.path.join(args.save_path,"last.ckpt") 
+
+    if (not args.stage1_ckpt_path == "None") and (not os.path.exists(last_ckpt)):
+        #load stage1 model
+        s = torch.load(args.stage1_ckpt_path)
+        model.load_state_dict(s['state_dict'],strict=False)
+        model.model._init_teacher()
+        print("======================load weights from {}",args.stage1_ckpt_path)
+
     trainer.fit(model,datamodule=data,
                 ckpt_path=last_ckpt if  os.path.exists(last_ckpt) else None)
 
@@ -66,6 +83,8 @@ if __name__ == "__main__":
     parser = ArgumentParser("ATST")
     #parser = Trainer.add_argparse_args(parser)
 
+    parser.add_argument("--stage1_ckpt_path",type=str,default="None")
+    parser.add_argument("--train_mode",type=str,default="cls")
     parser.add_argument("--save_path",type=str)
     parser.add_argument("--query_model",type=str)
     parser.add_argument('--nproc', type=int,  default=2)

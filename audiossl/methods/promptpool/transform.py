@@ -12,7 +12,7 @@ import random_mask
 
     
 class FrameATSTTrainTransform:
-    def __init__(self,sr=16000,aug_tea=True,aug_stu=True,mask_ratio=0.75,min_mask_len=2,mask_len=5,mask_type="random",anchor_len=6.,patch_h=64,patch_w=4,**kwargs):
+    def __init__(self,sr=16000,aug_tea=False,aug_stu=True,mask_ratio=0.65,min_mask_len=2,mask_len=5,mask_type="block",anchor_len=6.,patch_h=64,patch_w=4,**kwargs):
         melspec_t = torchaudio.transforms.MelSpectrogram(
             sr, f_min=60, f_max=7800, hop_length=160, win_length=1024, n_fft=1024, n_mels=64)
         to_db = torchaudio.transforms.AmplitudeToDB(stype="power",top_db=80)
