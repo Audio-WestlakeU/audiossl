@@ -2,12 +2,12 @@
 warmup_steps=1300
 max_steps=39000
 batch_size=384
-subset=200000
+subset=2000
 ema=0.99
 lr=5e-4
 querymodel=~/audiossl/ckpts/base.ckpt 
 data_path=$1
-framemodel=$2
+stage1_ckpt_path=$2
 org_save_path=$3
 nproc=4
 devices=0,1,2,3
