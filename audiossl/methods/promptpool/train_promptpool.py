@@ -10,7 +10,7 @@ from query import extract_queries,QueryDataModule,kmeans_cosine
 import torch
 import os
 from fast_pytorch_kmeans import KMeans
-from transform import FrameATSTTrainTransform
+from transform import FrameATSTTrainTransform, MixATSTTrainTransform
 
 from transform_cls import ClsPromptTrainTransform
 
@@ -48,8 +48,12 @@ def main(args):
     transform = None
     if args.train_mode=="cls":
         transform = ClsPromptTrainTransform()
-    else:
+    elif args.train_mode == "frame":
         transform = FrameATSTTrainTransform()
+    elif args.train_mode == "cls+frame":
+        transform = MixATSTTrainTransform()
+    else:
+        raise NotImplementedError
 
     data = PromptPoolDataModule(queries=queries,transform=transform,**dict_args)
     model = PromptPoolLightningModule(prompt_key=c.cpu(),**dict_args)                            
@@ -72,7 +76,13 @@ def main(args):
     if (not args.stage1_ckpt_path == "None") and (not os.path.exists(last_ckpt)):
         #load stage1 model
         s = torch.load(args.stage1_ckpt_path)
-        model.load_state_dict(s['state_dict'],strict=False)
+        load_s = {k:v for k,v in s['state_dict'].items() if k.startswith('model.student.encoder')} 
+        model.load_state_dict(load_s,strict=False)
+
+        if args.train_mode == "frame":
+            model.model.student.encoder.prompt_pool.requires_grad=False
+
+
         model.model._init_teacher()
         print("======================load weights from {}",args.stage1_ckpt_path)
 

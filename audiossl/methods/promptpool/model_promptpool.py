@@ -1,4 +1,5 @@
 from tkinter import W
+from webbrowser import get
 from pytorch_lightning import LightningModule
 from audiossl.methods.promptpool.prompt_pool import PromptPoolAST
 from transformers.optimization import AdamW, get_cosine_schedule_with_warmup
@@ -9,6 +10,10 @@ from audiossl.models.atst.byol import ByolLoss,build_mlp
 import torch
 from audiossl.methods.promptpool.audio_transformer import FrameAST_base, FrameAST_small
 
+def merge_params_groups(pg1,pg2):
+    pg1[0]['params'] += pg2[0]['params']
+    pg1[1]['params'] += pg2[1]['params']
+    return pg1
 
 def get_params_groups_custom(model,filter="prompts"):
     regularized = []
@@ -33,11 +38,24 @@ class ModelWrapper(nn.Module):
         # disable layers dedicated to ImageNet labels classification
         self.encoder = encoder
         self.train_mode = train_mode
-        self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
-        if predictor:
-            self.predictor=build_mlp(2,256,4096,256,last_bn=False)
-        else: 
-            self.predictor=nn.Identity()
+
+        if self.train_mode == "cls+frame":
+            self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
+            self.projector2 = build_mlp(2,embed_dim,4096,256,last_bn=False)
+            if predictor:
+                self.predictor=build_mlp(2,256,4096,256,last_bn=False)
+                self.predictor2=build_mlp(2,256,4096,256,last_bn=False)
+            else: 
+                self.predictor=nn.Identity()
+                self.predictor2=nn.Identity()
+
+        
+        else:
+            self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
+            if predictor:
+                self.predictor=build_mlp(2,256,4096,256,last_bn=False)
+            else: 
+                self.predictor=nn.Identity()
 
     def forward(self, x, length, query,mask_index=None,mask_input=False, avg=False):
         cls_repr,frm_repr = self.encoder(torch.cat(x),
@@ -51,6 +69,11 @@ class ModelWrapper(nn.Module):
             return self.predictor(self.projector(frm_repr))
         elif self.train_mode == "cls":
             return self.predictor(self.projector(cls_repr))
+        elif self.train_mode == "cls+frame":
+            if mask_index is None:
+                return self.predictor(self.projector(cls_repr))
+            else:
+                return self.predictor2(self.projector2(frm_repr))
         else:
             raise NotImplementedError
 
@@ -107,13 +130,20 @@ class PromptPool(nn.Module):
 
     def forward(self,x,length,query,mask_index=None):
         if self.train_mode=="cls":
-            stu=self.student(x,length,query)
-            tea=self.teacher(x,length,query)
+            return self.forward_cls(x,length,query)
         elif self.train_mode=="frame":
-            stu=self.student(x,length,query,mask_index,True)
-            tea=self.teacher(x,length,query,mask_index,False)
+            return self.forward_frame(x,length,query,mask_index)
         else:
             raise NotImplementedError
+
+    def forward_cls(self,x,length,query):
+        stu=self.student(x,length,query)
+        tea=self.teacher(x,length,query)
+        return self.loss_fn(stu,tea) 
+
+    def forward_frame(self,x,length,query,mask_index):
+        stu=self.student(x,length,query,mask_index,True)
+        tea=self.teacher(x,length,query,mask_index,False)
         return self.loss_fn(stu,tea)
 
     def update_teacher(self,m):
@@ -122,6 +152,10 @@ class PromptPool(nn.Module):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
             for param_q, param_k in zip(self.student.projector.parameters(), self.teacher.projector.parameters()):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+
+            if self.train_mode == "cls+frame":
+                for param_q, param_k in zip(self.student.projector2.parameters(), self.teacher.projector2.parameters()):
+                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
 
 class PromptPoolLightningModule(LightningModule):
@@ -148,42 +182,97 @@ class PromptPoolLightningModule(LightningModule):
         self.ema_scheduler= cosine_scheduler_step(ema,1,max_steps,0)
         self.wd_scheduler = cosine_scheduler_step(0.04,0.4,max_steps,0)
         self.mylr_scheduler = cosine_scheduler_step(learning_rate,1e-6,max_steps,warmup_steps)
+        if self.train_mode == "cls+frame":
+            self.automatic_optimization = False
+
         self.save_hyperparameters()
     def training_step(self,batch,batch_idx):
         self.schedule()
         if self.train_mode == "cls":
             (melspecs,lengths),query,_ = batch
             byol_loss,std_s,std_t= self.model(melspecs,lengths,query)
+            loss = byol_loss 
+            self.log("loss",loss,prog_bar=True,logger=True)
+            self.log("byol_loss",byol_loss,prog_bar=True,logger=True)
+            self.log("std_t",std_t,prog_bar=True,logger=True)
+            self.log("std_s",std_s,prog_bar=True,logger=True)
+            self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
+            self.log("step",self.global_step,prog_bar=True,logger=True)
+            return loss
+
         elif self.train_mode == "frame":
             (melspecs,lengths,masks),query,_ = batch
             byol_loss,std_s,std_t= self.model(melspecs,lengths,query,masks)
+            loss = byol_loss 
+            self.log("loss",loss,prog_bar=True,logger=True)
+            self.log("byol_loss",byol_loss,prog_bar=True,logger=True)
+            self.log("std_t",std_t,prog_bar=True,logger=True)
+            self.log("std_s",std_s,prog_bar=True,logger=True)
+            self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
+            self.log("step",self.global_step,prog_bar=True,logger=True)
+            return loss
+        elif self.train_mode == "cls+frame":
+            (melspecs,lengths,masks),query,_ = batch
+            opt_cls,opt_frame = self.optimizers()
+            byol_loss,std_s,std_t=self.model.forward_frame(melspecs[:2],lengths[:2],query,masks)
+            opt_frame.zero_grad()
+            self.manual_backward(byol_loss)
+            opt_frame.step()
+            self.log("loss_frame",byol_loss,prog_bar=True,logger=True)
+            self.log("std_t_frame",std_t,prog_bar=True,logger=True)
+            self.log("std_s_frame",std_s,prog_bar=True,logger=True)
+
+            byol_loss,std_s,std_t=self.model.forward_cls(melspecs[2:],lengths[2:],query)
+            opt_cls.zero_grad()
+            self.manual_backward(byol_loss)
+            opt_cls.step()
+            self.log("loss_cls",byol_loss,prog_bar=True,logger=True)
+            self.log("std_t_cls",std_t,prog_bar=True,logger=True)
+            self.log("std_s_cls",std_s,prog_bar=True,logger=True)
+
+            self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
+            self.log("step",self.global_step,prog_bar=True,logger=True)
         else:
             raise NotImplementedError
-        loss = byol_loss 
-        self.log("loss",loss,prog_bar=True,logger=True)
-        self.log("byol_loss",byol_loss,prog_bar=True,logger=True)
-        self.log("std_t",std_t,prog_bar=True,logger=True)
-        self.log("std_s",std_s,prog_bar=True,logger=True)
-        self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
-        self.log("step",self.global_step,prog_bar=True,logger=True)
         
-        return loss
     def schedule(self):
         for i, param_group in enumerate(self.trainer.optimizers[0].param_groups):
             param_group["lr"] = self.mylr_scheduler[self.global_step]
 
             if i == 0:  # only the first group is regularized
                 param_group["weight_decay"] = self.wd_scheduler[self.global_step]
+        if self.train_mode == "cls+frame":
+            for i, param_group in enumerate(self.trainer.optimizers[1].param_groups):
+                param_group["lr"] = self.mylr_scheduler[self.global_step]
+
+                if i == 0:  # only the first group is regularized
+                    param_group["weight_decay"] = self.wd_scheduler[self.global_step]
         
         self.log("wd",self.wd_scheduler[self.global_step],prog_bar=True,logger=True)
         self.log("lr",param_group["lr"],prog_bar=True,logger=True)
 
     def configure_optimizers(self):
-        params = get_params_groups(self.model.student)
-        optimizer = AdamW(params,
-                          lr=self.learning_rate,
-                          weight_decay=0.)
-        return [optimizer]
+        if self.train_mode == "cls+frame":
+            pg_pro = get_params_groups(self.model.student.projector)
+            pg_pre = get_params_groups(self.model.student.predictor)
+            pg = merge_params_groups(pg_pro,pg_pre)
+            pg[0]['params'].append(self.model.student.encoder.prompt_pool)
+
+            opt_cls = AdamW(pg,lr=self.learning_rate,weight_decay=0.)
+            pg_ast = get_params_groups(self.model.student.encoder.framemodel)
+            pg_pro = get_params_groups(self.model.student.projector2)
+            pg_pre = get_params_groups(self.model.student.predictor2)
+            pg = merge_params_groups(pg_ast,pg_pro)
+            pg = merge_params_groups(pg,pg_pre)
+            opt_frame = AdamW(pg,lr=self.learning_rate,weight_decay=0.)
+            return [opt_cls,opt_frame]
+
+        else:
+            params = get_params_groups(self.model.student)
+            optimizer = AdamW(params,
+                            lr=self.learning_rate,
+                            weight_decay=0.)
+            return [optimizer]
     def on_train_batch_end(self, outputs, batch, batch_idx: int, unused: int = 0) -> None:
         m = self.ema_scheduler[self.global_step]
         self.model.update_teacher(m)
