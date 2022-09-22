@@ -122,12 +122,12 @@ class PretrainedPromptPoolEncoderPLModule(LightningModule):
     def forward(self, batch):
         (mel, length),  y, key = batch
         if self.samplewise_query:
-            queries = torch.mean(self.queries_train,dim=0,keepdim=True).expand(mel.shape[0],-1).to("cuda")
-        else:
             queries = []
             for k in key:
                 queries.append(self.queries[k])
             queries = torch.stack(queries,dim=0).to("cuda")
+        else:
+            queries = torch.mean(self.queries_train,dim=0,keepdim=True).expand(mel.shape[0],-1).to("cuda")
         chunk_len=601
         total_len = mel.shape[-1]
         num_chunks = total_len // chunk_len + 1

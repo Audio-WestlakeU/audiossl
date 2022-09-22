@@ -7,26 +7,35 @@ from audiossl import datasets
 from audiossl.lightning.datamodules import (DownstreamDataModule,
                                             get_inmemory_datamodule)
 from audiossl.lightning.utils import EmbeddingExtractor
-from audiossl.methods.frame_atst.model import FrameATSTLightningModule
-from audiossl.methods.frame_atst.model_cls import ClsPromptLightningModule
-from audiossl.methods.frame_atst.downstream import utils
-from audiossl.methods.frame_atst.downstream.data import collate_fn
-from audiossl.methods.frame_atst.downstream.model import (
-    FineTuningPLModule, PretrainedEncoderPLModule, PretrainedCLsPromptEncoderPLModule)
-from audiossl.methods.frame_atst.downstream.transform import \
+from audiossl.methods.promptpool.model import FrameATSTLightningModule
+from audiossl.methods.promptpool.model_cls import ClsPromptLightningModule
+from audiossl.methods.promptpool.downstream import utils
+from audiossl.methods.promptpool.downstream.data import collate_fn
+
+from audiossl.methods.promptpool.downstream.model import (
+    FineTuningPLModule, PretrainedEncoderPLModule, PretrainedCLsPromptEncoderPLModule, PretrainedPromptPoolEncoderPLModule)
+from audiossl.methods.promptpool.downstream.transform import \
     FreezingTransform, FinetuneTargetTransform, FinetuneTrainTransform, FinetuneEvalTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.profiler import SimpleProfiler
+from audiossl.methods.promptpool.model_promptpool import PromptPoolLightningModule
 from copy import deepcopy
+from audiossl.methods.promptpool.downstream.query import extract_queries
 
 def get_pretraied_encoder(args):
     # get pretrained encoder
     dict_args = vars(args)
 
     s = torch.load(args.pretrained_ckpt_path)
-    if 'nprompt' in s['hyper_parameters']:
+
+    if 'pool_size' in s['hyper_parameters']:
+        pretrained_model = PromptPoolLightningModule.load_from_checkpoint(
+            args.pretrained_ckpt_path)
+        pretrained_encoder = pretrained_model.model.teacher.encoder
+        return pretrained_encoder
+    elif 'nprompt' in s['hyper_parameters']:
         pretrained_model = ClsPromptLightningModule.load_from_checkpoint(
             args.pretrained_ckpt_path)
         pretrained_encoder = pretrained_model.model.teacher.encoder
@@ -63,8 +72,21 @@ def run(args, pretrained_module, fold=None):
                                 fold=fold,
                                 collate_fn=collate_fn,
                                 transforms=[train_transform,eval_trainsform,eval_trainsform],
-                                target_transforms=[target_transform,None,None])
+                                target_transforms=[target_transform,None,None],
+                                return_key=True)
+    # query hack
+    def query_():
+        queries,queries_train = extract_queries("/data/home/lixian/audiossl/ckpts/base.ckpt",data,1)
+        torch.save([queries,queries_train],os.path.join(args.save_path,"query.ckpt"))
+        return queries,queries_train
+    
+    if os.path.exists(os.path.join(args.save_path,"query.ckpt")):
+        queries,queries_train = torch.load(os.path.join(args.save_path,"query.ckpt"))
+    else:
+        queries,queries_train = query_()
 
+    pretrained_module.queries = queries
+    pretrained_module.queries_train = queries_train
     """train a linear classifier on extracted embedding"""
     # train
     dict_args = vars(args)
@@ -127,6 +149,7 @@ def main():
 
     parser.add_argument("--n_last_blocks", type=int, default=12)
     parser.add_argument("--pretrained_ckpt_path", type=str,required=True)
+    parser.add_argument("--samplewise_query", type=bool_flag, default=False)
     parser.add_argument("--save_path", type=str,required=True)
     parser.add_argument("--mixup_training", type=bool_flag,default=False)
     parser.add_argument('--nproc', type=int,  default=1)
@@ -140,7 +163,13 @@ def main():
 
     """load pretrained encoder"""
     pretrained_encoder = get_pretraied_encoder(args)
-    if hasattr(pretrained_encoder,"nprompt"):
+    if hasattr(pretrained_encoder,"pool_size"):
+        pretrained_module = PretrainedPromptPoolEncoderPLModule(pretrained_encoder,
+                                                        None,
+                                                        6.,
+                                                        args.n_last_blocks,
+                                                        samplewise_query=args.samplewise_query)
+    elif hasattr(pretrained_encoder,"nprompt"):
         pretrained_module = PretrainedCLsPromptEncoderPLModule(pretrained_encoder,
                                                         6.,
                                                         args.n_last_blocks)
@@ -149,6 +178,8 @@ def main():
                                                         6.,
                                                         args.n_last_blocks)
     pretrained_module.unfreeze()
+    pretrained_module.encoder.prompt_hgram.requires_grad=False
+    pretrained_module.encoder.prompt_keys.requires_grad=False
 
     """train"""
     if num_folds > 1:
