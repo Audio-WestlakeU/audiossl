@@ -228,6 +228,7 @@ class Urbansound8k(Dataset):
         self.path = path
         self.sr=sr
         self.transform=transform
+        
     def __getitem__(self,index):
         file_name = self.file_names[index]
         label = self.labels[index]

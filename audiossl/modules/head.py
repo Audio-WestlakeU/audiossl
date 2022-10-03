@@ -18,8 +18,6 @@ class LinearHead(nn.Module):
         if self.use_norm:
             x = x.unsqueeze(2)
             x = self.norm(x)
-
         x = x.view(x.size(0), -1)
-
         # linear layer
         return self.linear(x)

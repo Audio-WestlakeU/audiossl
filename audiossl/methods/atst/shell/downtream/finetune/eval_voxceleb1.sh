@@ -1,5 +1,6 @@
 source ./eval_func.sh
-
+source ./eval_env.sh
+export DEVICE=5
 
 eval_cmd()
 {

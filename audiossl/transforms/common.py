@@ -49,13 +49,16 @@ class CentralCrop(CustomAudioTransform):
 
     def __call__(self, signal):
 
-        if signal.shape[1] < self.size :
+        if signal.shape[-1] < self.size :
             if self.pad:
-                signal = F.pad(signal, (0, self.size-signal.shape[1]))
+                signal = F.pad(signal, (0, self.size-signal.shape[-1]))
             return signal
 
-        start = (signal.shape[1] - self.size) // 2
-        return signal[:, start: start + self.size]
+        start = (signal.shape[-1] - self.size) // 2
+        if len(signal.shape) > 1:
+            return signal[:, start: start + self.size]
+        else:
+            return signal[start: start + self.size]
 
 class RandomCrop(CustomAudioTransform):
     def __init__(self, size:int, pad:bool = True):
@@ -65,7 +68,7 @@ class RandomCrop(CustomAudioTransform):
     def __call__(self, signal):
         if signal.shape[1] < self.size :
             if self.pad:
-                signal = F.pad(signal, (0, self.size-signal.shape[1]))
+                signal = F.pad(signal, (0, self.size-signal.shape[-1]))
             return signal
         start = np.random.randint(0, signal.shape[-1] - self.size + 1)
         return signal[:, start: start + self.size]

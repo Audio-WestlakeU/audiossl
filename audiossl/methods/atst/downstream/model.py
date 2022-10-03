@@ -166,6 +166,9 @@ class FineTuningPLModule(LightningModule):
         self.save_hyperparameters(ignore=["encoder"])
 
     def training_step(self, batch, batch_idx):
+        print(batch)
+        import os
+        os._exit()
         self.encoder.train()
         self.schedule()
         x,y=self.encoder(batch)
@@ -192,6 +195,8 @@ class FineTuningPLModule(LightningModule):
 
 
     def validation_step(self, batch, batch_idx):
+
+        print(batch[0][0].shape, batch[0][1].shape, batch[1].shape)
         self.encoder.eval()
         x,y=self.encoder(batch)
         y_=y

@@ -9,6 +9,7 @@ from .byol_a import Nsynth,Urbansound8k
 from .voxceleb1 import SpeakerClassifiDataset
 from .librispeech import LibriSpeechDataset
 from .iemocap import IEMOCAPDataset
+from .dcase import DCASEDataset
 
 @register_dataset("voxceleb1",multi_label=False,num_labels=1251,num_folds=1)
 def create_voxceleb1(data_path,split,transform,target_transform):
@@ -45,11 +46,16 @@ def create_spcv2(data_path,split,transform,target_transform):
         split = "eval"
     return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform) 
 
-
+# [DCASE MARK] add a register for dcase dataset
+@register_dataset("dcase", multi_label=True, num_labels=10, num_folds=1)
+def create_dcase(config_path, split, transform=None, target_transform=None, unsup=False):
+    assert split in ["train", "valid", "test"], "Dataset type: {} is not supported.".format(split)
+    return DCASEDataset(config_path, split, transform=transform, target_transform=None, unsup=unsup)
 
 __all__ = ['LMDBDataset',
            'Nsynth',
            'Urbansound8k',
            'LibriSpeechDataset',
            'SpeakerClassifiDataset',
-           'IEMOCAPDataset']
+           'IEMOCAPDataset',
+           'DCASE']

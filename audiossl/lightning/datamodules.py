@@ -17,6 +17,7 @@ def get_inmemory_datamodule(x_train,
 
     return LightningDataModule.from_datasets(dataset_train,dataset_val,dataset_test,batch_size=batch_size)
 
+# Add a batch sampler for DCASE concat dataset [MARK]
 class DownstreamDataModule(LightningDataModule):
     def __init__(self,
                  data_path:str,
@@ -77,14 +78,30 @@ class DownstreamDataModule(LightningDataModule):
         pass
 
     def train_dataloader(self):
-        return data.DataLoader(self.dataset_train,
-                        batch_size=self.batch_size,
-                        num_workers=self.num_workers,
-                        shuffle=self.shuffle,
-                        sampler=None,
-                        drop_last=False,
-                        collate_fn=self.collate_fn,
-                        pin_memory=True)
+        # Add dataloader for ConcatDataset
+        if len(self.dataset_train) > 1:
+            sampler = self.dataset_train[1]["sampler"]
+            batch_sizes = self.dataset_train[1]["batch_size"]
+            return data.DataLoader(
+                self.dataset_train[0],
+                sampler=sampler,
+                batch_size=batch_sizes,
+                num_workers=self.num_workers,
+                collate_fn=self.collate_fn,
+                pin_memory=True,
+                )
+        else:
+            return data.DataLoader(
+                self.dataset_train[0],
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                shuffle=self.shuffle,
+                sampler=None,
+                drop_last=False,
+                collate_fn=self.collate_fn,
+                pin_memory=True
+                )
+                            
     def val_dataloader(self):
         return data.DataLoader(self.dataset_val,
                         batch_size=self.batch_size,
