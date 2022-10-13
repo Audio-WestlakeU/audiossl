@@ -30,10 +30,31 @@ def get_pretraied_encoder(args):
     s = torch.load(args.pretrained_ckpt_path)
 
     if 'pytorch-lightning_version' in s.keys():
+        print("Case lightning model ckpt used")
         pretrained_model = ATSTLightningModule.load_from_checkpoint(
             args.pretrained_ckpt_path)
         pretrained_encoder = pretrained_model.model.teacher.encoder
+
+        # [MARK]: Support for 12-block ATST only
+        unfreeze_layers = args.unfreeze_last_n_blocks
+        for p in pretrained_encoder.parameters():
+            p.requires_grad = False
+        # Finetune certain blocks
+        unfreeze_ids = list(reversed(range(12)))
+        if not unfreeze_ids:
+            print("Freeze mode")
+            return pretrained_encoder
+        else:
+            print("Finetune mode")
+            unfreeze_ids = unfreeze_ids[: unfreeze_layers]
+            print("Unfreezeing last block ids:", unfreeze_ids)
+            for i in unfreeze_ids:
+                layer = getattr(pretrained_encoder.blocks, str(i))
+                for child in layer.parameters():
+                    child.requires_grad = True
+            return pretrained_encoder
     else:
+        print("Case network ckpt used")
         from audiossl.methods.atst.downstream.utils import \
             load_pretrained_weights
         from audiossl.models.atst.audio_transformer import AST_base, AST_small
@@ -44,23 +65,8 @@ def get_pretraied_encoder(args):
             pretrained_encoder = AST_base(use_cls=True)
         load_pretrained_weights(
             pretrained_encoder, pretrained_weights=args.pretrained_ckpt_path, checkpoint_key="teacher")
-        
-        # [MARK]: Support for 12-block ATST only
-        unfreeze_layers = args.unfreeze_last_n_blocks
-        # Freeze mode
-        if unfreeze_layers == 0:
-            return pretrained_encoder
-        # Finetune certain blocks
-        unfreeze_ids = list(reversed(range(12)))
-        unfreeze_ids = unfreeze_ids[: unfreeze_layers]
-        print("Unfreezeing last block ids:", unfreeze_ids)
 
-        for i in unfreeze_ids:
-            layer = getattr(pretrained_encoder.encoder.blocks, str(i))
-            for child in layer.parameters():
-                child.requires_grad = True
-
-    return pretrained_encoder
+        return pretrained_encoder
 
 
 def run(args, pretrained_module, fold=None):
@@ -163,12 +169,13 @@ def main():
     num_folds = dataset_info.num_folds
 
     """load pretrained encoder"""
+    print("Getting pretrain encoder...")
     pretrained_encoder = get_pretraied_encoder(args)
     pretrained_module = PretrainedEncoderPLModule(
         pretrained_encoder,
         args.n_last_blocks
         )
-    pretrained_module.freeze()
+    # pretrained_module.freeze()
 
     """train"""
     if num_folds > 1:

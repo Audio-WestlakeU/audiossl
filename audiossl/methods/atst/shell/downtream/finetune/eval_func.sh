@@ -9,7 +9,7 @@ eval()
         local max_epochs=$7
         local warmup_epochs=$8
         local unfreeze_n=$9
-        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_const_lr${lr}
+        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_unfreeze${unfreeze}
         local log=$save_path/verbose.txt
 
 
@@ -36,7 +36,10 @@ eval()
                         --data_path $data_path\
                         --pretrained_ckpt_path $pretrained_ckpt_path\
                         --learning_rate $lr\
-                        --save_path $save_path 
+                        --save_path $save_path\
+                        --max_epochs $max_epochs\
+                        --warmup_epochs $warmup_epochs\
+                        --unfreeze_last_n_blocks $unfreeze_n
                 
                 exit
 

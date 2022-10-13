@@ -3,11 +3,11 @@ cd /mnt/home/shaonian/ATST/audiossl/audiossl/methods/atst/shell/downtream/finetu
 
 source ./eval_env.sh
 export cmd="python /mnt/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/train_finetune_dcase.py"
-export DEVICE=0
+export DEVICE=7
 export DEBUG=0
 source ./eval_func.sh
 
-max_epochs=200
+max_epochs=100
 warmup_epochs=20
 unfreeze_n=1
 pretraind_ckpt_path='/mnt/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/dcase_logs/small.ckpt'
@@ -27,9 +27,12 @@ eval_cmd()
     eval ${n_last_blocks} ${batch_size}  "dcase" "/mnt/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/conf/dcase_dataset.yaml" ${pretraind_ckpt_path} ${lr} ${max_epochs} ${warmup_epochs} ${unfreeze_n}
 }
 
-for lr in 5e-1 1e-1 1e-2 1e-3
+for lr in 1e-1 1e-2
 do
-    eval_cmd ${n_last_blocks} ${batch_size} ${pretraind_ckpt_path} ${lr} ${max_epochs} ${warmup_epochs} ${unfreeze_n}
+    for unfreeze in 0 1 2 12
+    do
+        eval_cmd ${n_last_blocks} ${batch_size} ${pretraind_ckpt_path} ${lr} ${max_epochs} ${warmup_epochs} ${unfreeze}
+    done
 done
 
 cd ${CURRENT_PATH}
