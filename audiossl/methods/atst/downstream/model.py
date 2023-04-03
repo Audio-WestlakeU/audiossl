@@ -186,9 +186,9 @@ class FineTuningPLModule(LightningModule):
 
     def _cal_metric(self,output,target):
         if self.multi_label:
-            self.metric.update(output.sigmoid().cpu().numpy(),target.cpu().numpy())
+            self.metric.update(output.sigmoid(),target)
         else:
-            self.metric.update(output.cpu(),target.cpu())
+            self.metric.update(output,target)
 
 
     def validation_step(self, batch, batch_idx):
