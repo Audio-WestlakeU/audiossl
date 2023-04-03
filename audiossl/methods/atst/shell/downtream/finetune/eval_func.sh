@@ -11,7 +11,7 @@ eval()
         local max_epochs=$7
         local warmup_epochs=$8
         local mixup_training=$9
-        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}
+        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_mixup_${mixup_training}_max_epochs${max_epochs}
         
         local log=$save_path/verbose.txt
         
