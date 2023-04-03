@@ -9,6 +9,8 @@ from .byol_a import Nsynth,Urbansound8k
 from .voxceleb1 import SpeakerClassifiDataset
 from .librispeech import LibriSpeechDataset
 from .iemocap import IEMOCAPDataset
+from .dcase import DCASEDataset
+
 
 @register_dataset("voxceleb1",multi_label=False,num_labels=1251,num_folds=1)
 def create_voxceleb1(data_path,split,transform,target_transform,return_key=False):
@@ -34,6 +36,12 @@ def create_spcv2(data_path,split,transform,target_transform,return_key=False):
         split = "eval"
     return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform,return_key=return_key) 
 
+@register_dataset("fsd50k",multi_label=True,num_labels=200,num_folds=1)
+def create_fsd50k(data_path,split,transform,target_transform,return_key=False):
+    if split == "test":
+        split = "eval"
+    return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform,return_key=return_key) 
+
 @register_dataset("audioset_b",multi_label=True,num_labels=527,num_folds=1)
 def create_audioset_b(data_path,split,transform,target_transform,return_key=False):
     if split == "test":
@@ -46,6 +54,11 @@ def create_audioset(data_path,split,transform,target_transform,return_key=False)
         split = "eval"
     return LMDBDataset(data_path,split=split,transform=transform,target_transform=target_transform,return_key=return_key) 
 
+# [DCASE MARK] add a register for dcase dataset
+@register_dataset("dcase", multi_label=True, num_labels=10, num_folds=1)
+def create_dcase(config_path, split, transform=None, target_transform=None, unsup=False,return_key=False):
+    assert split in ["train", "valid", "test"], "Dataset type: {} is not supported.".format(split)
+    return DCASEDataset(config_path, split, transform=transform, target_transform=None, unsup=unsup)
 
 
 __all__ = ['LMDBDataset',
