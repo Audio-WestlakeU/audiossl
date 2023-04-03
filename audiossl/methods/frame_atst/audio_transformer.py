@@ -7,7 +7,7 @@ from functools import partial
 import time
 import warnings
 import math
-from audiossl.methods.frame_atst import random_mask
+from audiossl.methods.pyramid import random_mask
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
@@ -78,7 +78,7 @@ class PatchEmbed_v2(nn.Module):
 
 class FrameAST(nn.Module):
     """ Vision Transformer """
-    def __init__(self,use_cls=0,use_unmask_for_cls=True,  crop_ratio=0.6, use_mse=0,avg_blocks=8, spec_h=64,spec_w=1001, patch_w=16,patch_h=16, in_chans=1, num_classes=0, embed_dim=768, depth=12,
+    def __init__(self,spec_h=64,spec_w=1001, patch_w=16,patch_h=16, in_chans=1, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0.1, norm_layer=nn.LayerNorm, **kwargs):
         super().__init__()
@@ -95,14 +95,7 @@ class FrameAST(nn.Module):
 
         num_patches = get_num_patches(spec_h,spec_w,patch_h,patch_w)
         self.num_patches = num_patches
-        self.use_cls = use_cls
-        self.use_unmask_for_cls= use_unmask_for_cls
-        self.crop_ratio=crop_ratio
-        self.avg_blocks = avg_blocks
-        self.use_mse=use_mse
 
-        if use_cls:
-            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
 
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
@@ -114,16 +107,10 @@ class FrameAST(nn.Module):
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
         self.norm_frame = norm_layer(embed_dim)
-        self.norm_cls = norm_layer(embed_dim)
-        if self.use_mse>0:
-            self.norm_mse = norm_layer(embed_dim)
-            self.mel_linear = nn.Linear(embed_dim,patch_h*patch_w)
 
 
         trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.mask_embed, std=.02)
-        if use_cls:
-            trunc_normal_(self.cls_token, std=.02)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -159,221 +146,43 @@ class FrameAST(nn.Module):
         length_mask = length_mask.to(x.device)
         mask_index = mask_index & length_mask
 
-        avg_x=[]
-        if self.use_cls > 0:
-            for i,blk in enumerate(self.blocks[:-self.use_cls]):
-                x = blk(x,patch_length)
-                if self.avg_blocks > 0:
-                    if i >= len(self.blocks)-self.avg_blocks  :
-                        avg_x.append(F.instance_norm(x.transpose(1,2)).transpose(1,2))
-        else:
-            for i,blk in enumerate(self.blocks):
-                x = blk(x,patch_length)
-                if self.use_mse >0 and self.use_mse==i:
-                    x_mel=self.norm_mse(x)
-                    x_mel=self.mel_linear(x)
-                    mse_loss = F.mse_loss(x_mel[mask_index],mel_patches[mask_index])
+        for i,blk in enumerate(self.blocks):
+            x = blk(x,patch_length)
 
-                if self.avg_blocks > 0:
-                    if i >= len(self.blocks)-self.avg_blocks :
-                        avg_x.append(F.instance_norm(x.transpose(1,2)).transpose(1,2))
-        if self.avg_blocks > 0:
-            avg_x=torch.mean(torch.stack(avg_x),dim=0)
-            frame_repr = avg_x
-        else:
-            frame_repr = self.norm_frame(x)
+        frame_repr = self.norm_frame(x)
 
 
-        if self.use_cls > 0:
-            if self.use_unmask_for_cls:
-                B,T,C = x.shape
-                print(torch.sum(mask_index,dim=1))
-                x_unmasked = x[~mask_index].reshape(B,-1,C)
-                x = x_unmasked
-
-            B,T,C = x.shape
-            select=random_mask.get_mask_batch(B,T,self.crop_ratio)
-            x = x[select].reshape(B,-1,C)
-
-            cls_tokens = (self.cls_token + self.pos_embed[:,0:1,:]).expand(B, -1, -1)
-            x = torch.cat((cls_tokens, x), dim=1)
-            for i,blk  in enumerate(self.blocks[-self.use_cls:]):
-                x = blk(x,patch_length+1)
-            cls_repr = self.norm_cls(x)[:,0]
-
-            return frame_repr[mask_index],cls_repr
-
-        else:
-            if self.use_mse>0:
-                return frame_repr[mask_index],mse_loss
-            else: 
-                return frame_repr[mask_index]
+        return frame_repr[mask_index]
         
 
     def get_last_selfattention(self, x):
         x,_,_,_,_,_ = self.prepare_tokens(x,mask_index=None,length=None,mask=False)
         atts=[]
-        if self.use_cls>0:
-            for i, blk in enumerate(self.blocks[:-self.use_cls]):
-                if i < len(self.blocks) - self.use_cls -1:
-                    x,att = blk(x,return_attention=True)
-                    atts.append(att)
-                else:
-                    # return attention of the last block
-                    x,att = blk(x, return_attention=True)
-                    atts.append(att)
-                    return atts
-        else:
-            for i, blk in enumerate(self.blocks):
-                if i < len(self.blocks) - 1:
-                    x,att = blk(x,return_attention=True)
-                    atts.append(att)
-                else:
-                    x,att = blk(x,return_attention=True)
-                    atts.append(att)
-                    return atts
-                    # return attention of the last block
+        for i, blk in enumerate(self.blocks):
+            if i < len(self.blocks) - 1:
+                x,att = blk(x,return_attention=True)
+                atts.append(att)
+            else:
+                x,att = blk(x,return_attention=True)
+                atts.append(att)
+                return atts
+                # return attention of the last block
 
     def get_intermediate_layers(self, x,length, n=1, scene=True):
         x,_,_,_,_,patch_length = self.prepare_tokens(x,mask_index=None,length=length,mask=False)
         # we return the output tokens from the `n` last blocks
         output = []
-        if self.use_cls > 0:
-            for i,blk in enumerate(self.blocks[:-self.use_cls]):
-                x = blk(x,patch_length)
-                if len(self.blocks) - i <= n :
+        for i,blk in enumerate(self.blocks):
+            x = blk(x,patch_length)
+            if len(self.blocks) - i <= n :
+                if scene:
                     output.append(torch.mean(self.norm_frame(x),dim=1))
-
-            B,T,C = x.shape
-            cls_tokens = (self.cls_token + self.pos_embed[:,0:1,:]).expand(B, -1, -1)
-            x = torch.cat((cls_tokens, x), dim=1)
-            for i,blk  in enumerate(self.blocks[-self.use_cls:],len(self.blocks)-self.use_cls):
-                x = blk(x,patch_length+1)
-                if len(self.blocks) - i <= n :
-                    output.append(self.norm_cls(x)[:,0])
-
-        else:
-            for i,blk in enumerate(self.blocks):
-                x = blk(x,patch_length)
-                if len(self.blocks) - i <= n :
-                    if scene:
-                        output.append(torch.mean(self.norm_frame(x),dim=1))
-                    else:
-                        output.append(self.norm_frame(x))
+                else:
+                    output.append(self.norm_frame(x))
 
         return torch.cat(output,dim=-1)
 
         
-    def get_intermediate_layers_chunks(self, x,length, n=1,  chunk_len=401, avgpool=True):
-        total_len = x.shape[-1]
-        num_chunks = total_len // chunk_len + 1
-        cls = []
-        avg = []
-        chunk_mark = []
-        for i in range(num_chunks):
-            cur_len = torch.clip(length - i*chunk_len,0)
-            if i==0:
-                chunk_mark_ = cur_len > 0
-            else:
-                chunk_mark_ = cur_len > chunk_len//2
-            start = i*chunk_len
-            end = (i+1) * chunk_len
-            if end > total_len:
-                end = total_len
-            x_chunk=x[:,:,:,start:end]
-            x_chunk,_,_,_,_,patch_length = self.prepare_tokens(x_chunk,mask_index=None,length=cur_len,mask=False)
-            # we return the output tokens from the `n` last blocks
-            output_i = []
-            for j, blk in enumerate(self.blocks):
-                if patch_length is None:
-                    x_chunk = blk(x_chunk,length=None)
-                else:
-                    if self.use_cls:
-                        x_chunk= blk(x_chunk,length=patch_length+1)
-                    else:
-                        x_chunk= blk(x_chunk,length=patch_length)
-                if len(self.blocks) - j <= n:
-                    output_i.append(self.norm(x_chunk))
-            cls_,avg_=get_cls_avg(output_i,patch_length,self.use_cls)
-            """
-            print("{}-th chunk".format(i))
-            print(len(cls_),cls_[0].shape)
-            print(len(avg_),avg_[0].shape)
-            print(length)
-            print(cur_len)
-            print(chunk_mark_.shape)
-            print("{}-th chunk".format(i))
-            """
-            cls.append(cls_)
-            avg.append(avg_)
-            chunk_mark.append([chunk_mark_]*n)
-        cls = [list(x) for x in zip(*cls)]
-        avg = [list(x) for x in zip(*avg)]
-        chunk_mark = [list(x) for x in zip(*chunk_mark)]
-        """
-        print(len(cls))
-        print(type(cls[0]))
-        print(len(cls[0]))
-        """
-
-        cls_out = []
-        avg_out = []
-        for cls_,avg_,chunk_mark_ in zip(cls,avg,chunk_mark):
-            """
-            print(type(cls_))
-            print(type(avg_))
-            print(type(chunk_mark_))
-            print(len(cls_))
-            print(len(avg_))
-            print(len(chunk_mark_))
-            print(type(cls_[0]))
-            print(type(avg_[0]))
-            print(type(chunk_mark_[0]))
-            print(cls_[0].shape)
-            print(avg_[0].shape)
-            print(chunk_mark_[0].shape)
-            """
-            cls_ = torch.stack(cls_,dim=0)
-            avg_ = torch.stack(avg_,dim=0)
-            chunk_mark_ = torch.stack(chunk_mark_,dim=0)
-            """
-            print(cls_.shape)
-            print(avg_.shape)
-            print(cls_[0][0])
-            print(cls_[1][0])
-            print(avg_[0][0])
-            print(avg_[1][0])
-            print(chunk_mark_.shape)
-            """
-            cls_=torch.sum(cls_*chunk_mark_.unsqueeze(-1),dim=0)/torch.sum(chunk_mark_.unsqueeze(-1),dim=0)
-            avg_=torch.sum(avg_*chunk_mark_.unsqueeze(-1),dim=0)/torch.sum(chunk_mark_.unsqueeze(-1),dim=0)
-            """
-            print(cls_[0])
-            print(avg_[0])
-            print(cls_.shape)
-            print(avg_.shape)
-            """
-
-            cls_out.append(cls_)
-            avg_out.append(avg_)
-        if avgpool:
-            return torch.cat(cls_out+avg_out,dim=-1)
-        else:
-            return torch.cat(cls_out,dim=-1)
-        #return cls_out,avg_out
-
-def get_cls_avg(output_i,cur_len,use_cls):
-    if use_cls:
-        length_mask = torch.arange(output_i[0].shape[1]-1).to(output_i[0].device) < cur_len.unsqueeze(1)
-    else:
-        length_mask = torch.arange(output_i[0].shape[1]).to(output_i[0].device) < cur_len.unsqueeze(1)
-    if use_cls:
-        cls = [x[:,0] for x in output_i]
-        avg = [torch.sum(x[:,1:]*length_mask.unsqueeze(-1),dim=1)/(cur_len.unsqueeze(1)+1e-6) for x in output_i]
-    else:
-        cls = [torch.zeros_like(x[:,0]) for x in output_i]
-        avg = [torch.sum(x*length_mask.unsqueeze(-1),dim=1)/(cur_len.unsqueeze(1)+1e-6) for x in output_i]
-    return cls,avg
 def FrameAST_small(patch_h=64,patch_w=4,**kwargs):
     return FrameAST(patch_h=patch_h,patch_w=patch_w,embed_dim=384,depth=12,num_heads=6,qkv_bias=False,norm_layer=partial(nn.LayerNorm, eps=1e-6),**kwargs)
 
