@@ -78,12 +78,14 @@ class FrameATSTTrainTransform:
 
         num_patches = get_num_patches(64,int(anchor_len*16000)//160 + 1,self.patch_h,self.patch_w)
 
-        if self.mask_type == "random":
-            mask = random_mask.get_mask_one(num_patches,num_patches,self.mask_ratio)
-        elif self.mask_type=="block":
-            mask = random_mask.get_mask(1,num_patches,self.mask_ratio,no_overlap=False,min_length=self.mask_len,type="static",other=self.min_mask_len).squeeze(0)
-        else:
-            mask = random_mask.get_mask(1,num_patches,self.mask_ratio,no_overlap=False,min_length=self.mask_len,type="uniform",other=self.min_mask_len).squeeze(0)
+        def get_mask():
+            if self.mask_type == "random":
+                mask = random_mask.get_mask_one(num_patches,num_patches,self.mask_ratio)
+            elif self.mask_type=="block":
+                mask = random_mask.get_mask(1,num_patches,self.mask_ratio,no_overlap=False,min_length=self.mask_len,type="static",other=self.min_mask_len).squeeze(0)
+            else:
+                mask = random_mask.get_mask(1,num_patches,self.mask_ratio,no_overlap=False,min_length=self.mask_len,type="uniform",other=self.min_mask_len).squeeze(0)
+            return mask
 
         crops.append(F.pad(self.positive_transform1(crop_positive1),
                           (0,int((self.max_positive_len*16000)//160-int(anchor_len*16000)//160))))
@@ -91,7 +93,8 @@ class FrameATSTTrainTransform:
         crops.append(F.pad(self.positive_transform2(crop_positive2),
                           (0,int((self.max_positive_len*16000)//160-int(positive_len*16000)//160))))
         lengths.append(int(positive_len*16000)//160+1)
-        masks.extend([mask]*2)
+        #masks.extend([get_mask(),get_mask()])
+        masks.extend([get_mask()]*2)
         
         return crops,lengths,masks
     

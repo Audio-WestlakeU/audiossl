@@ -83,7 +83,7 @@ class ModelWrapper(nn.Module):
 
 
 class PromptPool(nn.Module):
-    def __init__(self,arch,train_mode,pool_size,prompt_len,select_num,prompt_key,pool):
+    def __init__(self,arch,train_mode,pool_size,prompt_len,select_num,prompt_key,pool,**kwargs):
         super().__init__()
         self.train_mode = train_mode
         encoder_fn=PromptPoolAST
@@ -93,7 +93,7 @@ class PromptPool(nn.Module):
 
         self.pool_size=pool_size
         self.pool=pool
-        student=encoder_fn(ast_fn(),
+        student=encoder_fn(ast_fn(**kwargs),
                            pool_size=pool_size,
                            prompt_len=prompt_len,
                            select_num=select_num,
@@ -108,7 +108,7 @@ class PromptPool(nn.Module):
                                   predictor=True
                                       )
                 
-        self.teacher=ModelWrapper(encoder_fn(ast_fn(),
+        self.teacher=ModelWrapper(encoder_fn(ast_fn(**kwargs),
                                             pool_size=pool_size,
                                             prompt_len=prompt_len,
                                             select_num=select_num,
@@ -128,11 +128,11 @@ class PromptPool(nn.Module):
     def _init_teacher(self):
         self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "predictor" not in k })
 
-    def forward(self,x,length,query,mask_index=None):
+    def forward(self,x,length,query,mask_index=None,batch_idx=0):
         if self.train_mode=="cls":
             return self.forward_cls(x,length,query)
         elif self.train_mode=="frame":
-            return self.forward_frame(x,length,query,mask_index)
+            return self.forward_frame(x,length,query,mask_index,batch_idx)
         else:
             raise NotImplementedError
 
@@ -141,9 +141,9 @@ class PromptPool(nn.Module):
         tea=self.teacher(x,length,query)
         return self.loss_fn(stu,tea) 
 
-    def forward_frame(self,x,length,query,mask_index):
+    def forward_frame(self,x,length,query,mask_index,batch_idx):
         stu=self.student(x,length,query,mask_index,True)
-        tea=self.teacher(x,length,query,mask_index,False)
+        tea=self.teacher(x,length,query,mask_index[-1::-1],False)
         return self.loss_fn(stu,tea)
 
     def update_teacher(self,m):
@@ -174,7 +174,7 @@ class PromptPoolLightningModule(LightningModule):
                  **kwargs,
                  ):
         super().__init__()
-        self.model = PromptPool(arch,train_mode,pool_size,prompt_len,select_num,prompt_key,pool)
+        self.model = PromptPool(arch,train_mode,pool_size,prompt_len,select_num,prompt_key,pool,**kwargs)
         self.train_mode = train_mode
         self.learning_rate = learning_rate 
         self.warmup_steps =  warmup_steps
@@ -202,7 +202,7 @@ class PromptPoolLightningModule(LightningModule):
 
         elif self.train_mode == "frame":
             (melspecs,lengths,masks),query,_ = batch
-            byol_loss,std_s,std_t= self.model(melspecs,lengths,query,masks)
+            byol_loss,std_s,std_t= self.model(melspecs,lengths,query,masks,batch_idx)
             loss = byol_loss 
             self.log("loss",loss,prog_bar=True,logger=True)
             self.log("byol_loss",byol_loss,prog_bar=True,logger=True)

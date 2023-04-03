@@ -55,76 +55,33 @@ def compute_var(y):
 
 
 class ByolLoss(nn.Module):
-    def __init__(self,doublehead,symmetric):
+    def __init__(self,symmetric):
         super().__init__()
-        self.doublehead=doublehead
         self.symmetric=symmetric
     def forward(self,student,teacher):
-        if self.doublehead:
-            stu_frm,stu_cls=student
-            tea_frm,tea_cls=teacher
+        stu_frm=student
+        tea_frm=teacher
 
-            std_frm_stu = compute_var(F.normalize(stu_frm,dim=-1)).mean()
-            std_frm_tea = compute_var(F.normalize(tea_frm,dim=-1)).mean()
-            std_cls_stu = compute_var(F.normalize(stu_cls,dim=-1)).mean()
-            std_cls_tea = compute_var(F.normalize(tea_cls,dim=-1)).mean()
+        std_frm_stu = compute_var(F.normalize(stu_frm,dim=-1)).mean()
+        std_frm_tea = compute_var(F.normalize(tea_frm,dim=-1)).mean()
 
-            if self.symmetric:
-                stu_frm = stu_frm.chunk(2)
-                tea_frm = tea_frm.chunk(2)
-                total_loss_frm = 0
-                n_loss_terms = 0
-                for iq,q in enumerate(tea_frm):
-                    for iv,v in enumerate(stu_frm):
-                        if iq==iv:
-                            continue
-                        loss = byol_loss_func(q,v,simplified=False)
-                        n_loss_terms+=1
-                        total_loss_frm += loss
-                total_loss_frm /= n_loss_terms
-
-                stu_cls = stu_cls.chunk(2)
-                tea_cls = tea_cls.chunk(2)
-                total_loss_cls = 0
-                n_loss_terms = 0
-                for iq,q in enumerate(tea_cls):
-                    for iv,v in enumerate(stu_cls):
-                        if iq==iv:
-                            continue
-                        loss = byol_loss_func(q,v,simplified=False)
-                        n_loss_terms+=1
-                        total_loss_cls += loss
-                total_loss_cls /= n_loss_terms
-
-            else:
-                total_loss_frm = byol_loss_func(tea_frm,stu_frm)
-                total_loss_cls = byol_loss_func(tea_cls,stu_cls)
-            return total_loss_frm,total_loss_cls,std_frm_stu,std_frm_tea,std_cls_stu,std_cls_tea
+        if self.symmetric:
+            stu_frm = stu_frm.chunk(2)
+            tea_frm = tea_frm.chunk(2)
+            total_loss_frm = 0
+            n_loss_terms = 0
+            for iq,q in enumerate(tea_frm):
+                for iv,v in enumerate(stu_frm):
+                    if iq==iv:
+                        continue
+                    loss = byol_loss_func(q,v,simplified=False)
+                    n_loss_terms+=1
+                    total_loss_frm += loss
+            total_loss_frm /= n_loss_terms
 
         else:
-            stu_frm=student
-            tea_frm=teacher
-
-            std_frm_stu = compute_var(F.normalize(stu_frm,dim=-1)).mean()
-            std_frm_tea = compute_var(F.normalize(tea_frm,dim=-1)).mean()
-
-            if self.symmetric:
-                stu_frm = stu_frm.chunk(2)
-                tea_frm = tea_frm.chunk(2)
-                total_loss_frm = 0
-                n_loss_terms = 0
-                for iq,q in enumerate(tea_frm):
-                    for iv,v in enumerate(stu_frm):
-                        if iq==iv:
-                            continue
-                        loss = byol_loss_func(q,v,simplified=False)
-                        n_loss_terms+=1
-                        total_loss_frm += loss
-                total_loss_frm /= n_loss_terms
-
-            else:
-                total_loss_frm = byol_loss_func(tea_frm,stu_frm)
-            return total_loss_frm,std_frm_stu,std_frm_tea
+            total_loss_frm = byol_loss_func(tea_frm,stu_frm)
+        return total_loss_frm,std_frm_stu,std_frm_tea
 
 
 
@@ -139,26 +96,16 @@ class MultiCropWrapper(nn.Module):
     """
     def __init__(self, encoder,
                  embed_dim, 
-                 predictor=True,
-                 doublehead=True,
-                 use_mse=0):
+                 predictor=True):
         super(MultiCropWrapper, self).__init__()
         # disable layers dedicated to ImageNet labels classification
         self.encoder = encoder
-        self.use_mse = use_mse
-        self.doublehead=doublehead
         self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
-        if doublehead:
-            self.projector2 = build_mlp(2,embed_dim,4096,256,last_bn=False)
 
         if predictor:
             self.predictor=build_mlp(2,256,4096,256,last_bn=False)
-            if doublehead:
-                self.predictor2=build_mlp(2,256,4096,256,last_bn=False)
         else: 
             self.predictor=nn.Identity()
-            if doublehead:
-                self.predictor2=nn.Identity()
 
     def forward(self, x, length, mask, mask_input):
         # convert to list
@@ -173,40 +120,15 @@ class MultiCropWrapper(nn.Module):
             mse_loss = []
 
         for end_idx in idx_crops:
-            if self.doublehead:
-                _out_frame,_out_cls = self.encoder(torch.cat(x[start_idx: end_idx]),
-                                        length=torch.cat(length[start_idx:end_idx]),
-                                        mask_index=torch.cat(mask[start_idx:end_idx]),
-                                        mask_input=mask_input
-                                        )
-                # accumulate outputs
-                output_frame = torch.cat((output_frame, _out_frame))
-                output_cls = torch.cat((output_cls, _out_cls))
-            else:
-                if self.use_mse >0:
-                    _out_frame,_mse_loss = self.encoder(torch.cat(x[start_idx: end_idx]),
-                                        length=torch.cat(length[start_idx:end_idx]),
-                                        mask_index=torch.cat(mask[start_idx:end_idx]),
-                                        mask_input=mask_input
-                                        )
-                else:
-                    _out_frame = self.encoder(torch.cat(x[start_idx: end_idx]),
-                                        length=torch.cat(length[start_idx:end_idx]),
-                                        mask_index=torch.cat(mask[start_idx:end_idx]),
-                                        mask_input=mask_input
-                                        )
-                # accumulate outputs
-                output_frame = torch.cat((output_frame, _out_frame))
-                if self.use_mse>0:
-                    mse_loss.append(_mse_loss)
+            _out_frame = self.encoder(torch.cat(x[start_idx: end_idx]),
+                                length=torch.cat(length[start_idx:end_idx]),
+                                mask_index=torch.cat(mask[start_idx:end_idx]),
+                                mask_input=mask_input
+                                )
+            # accumulate outputs
+            output_frame = torch.cat((output_frame, _out_frame))
             start_idx = end_idx
         # Run the head forward on the concatenated features.
-        if self.doublehead:
-            return self.predictor(self.projector(output_frame)),self.predictor2(self.projector2(output_cls))
-        else: 
-            if self.use_mse>0:
-                return self.predictor(self.projector(output_frame)), torch.mean(torch.stack(mse_loss))
-            else:
-                return self.predictor(self.projector(output_frame))
+        return self.predictor(self.projector(output_frame))
 
 

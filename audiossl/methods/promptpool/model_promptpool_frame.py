@@ -26,6 +26,10 @@ class FrameATST(nn.Module):
                  arch="small",
                  use_cls=2,
                  symmetric=True,
+                 unmask_for_cls=True,
+                 crop_ratio=0.6,
+                 avg_blocks=8,
+                 use_mse=0,
                  **kwargs):
         super().__init__()
         if arch == "small":
@@ -36,13 +40,29 @@ class FrameATST(nn.Module):
             embed_dim = 768
         else:
             raise RuntimeError("arch {} is not implemented".format(arch))
+        self.doublehead=use_cls>0
         self.symmetric = symmetric
-        self.student=MultiCropWrapper(encoder_fn(**kwargs),
+        self.use_mse = use_mse
+        self.student=MultiCropWrapper(encoder_fn(use_cls=use_cls,
+                                                 use_unmask_for_cls=unmask_for_cls,
+                                                 crop_ratio=crop_ratio,
+                                                 avg_blocks=0,
+                                                 use_mse=use_mse,
+                                                 **kwargs),
                                       embed_dim,
-                                      predictor=True)
-        self.teacher=MultiCropWrapper(encoder_fn(**kwargs),
+                                      predictor=True,
+                                      doublehead=use_cls>0,
+                                      use_mse=use_mse)
+        self.teacher=MultiCropWrapper(encoder_fn(use_cls=use_cls,
+                                                 use_unmask_for_cls=unmask_for_cls,
+                                                 crop_ratio=crop_ratio,
+                                                 avg_blocks=avg_blocks,
+                                                 use_mse=use_mse,
+                                                 **kwargs),
                                       embed_dim,
-                                      predictor=False)
+                                      predictor=False,
+                                      doublehead=use_cls>0,
+                                      use_mse=use_mse)
         for p in self.teacher.parameters():
             p.requires_grad = False
         self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "predictor" not in k })
@@ -50,14 +70,25 @@ class FrameATST(nn.Module):
     
     def forward(self,x,length,mask):
         if self.symmetric:
-            tea = self.teacher(x,length,mask,False)
-            stu = self.student(x,length,mask,True)
-            return self.loss_fn(stu,tea)
+            if self.use_mse>0:
+                tea,_ = self.teacher(x,length,mask,False)
+                stu,mse_loss= self.student(x,length,mask,True)
+                return list(self.loss_fn(stu,tea))+[mse_loss]
+            else:
+                tea = self.teacher(x,length,mask,False)
+                stu = self.student(x,length,mask,True)
+                return self.loss_fn(stu,tea)
             #total_loss_frm,total_loss_cls,std_frm_stu,std_frm_tea,std_cls_stu,std_cls_tea =
+
         else:
-            tea = self.teacher(x[:1],length[:1],mask[:1],False)
-            stu = self.student(x[1:],length[1:],mask[1:],True)
-            return self.loss_fn(stu,tea)
+            if self.use_mse>0:
+                tea,_ = self.teacher(x[:1],length[:1],mask[:1],False)
+                stu,mse_loss = self.student(x[1:],length[1:],mask[1:],True)
+                return list(self.loss_fn(stu,tea))+[mse_loss]
+            else:
+                tea = self.teacher(x[:1],length[:1],mask[:1],False)
+                stu = self.student(x[1:],length[1:],mask[1:],True)
+                return self.loss_fn(stu,tea)
             #total_loss_frm,std_frm_stu,std_frm_tea
     def update_teacher(self,m):
         with torch.no_grad():
@@ -65,6 +96,9 @@ class FrameATST(nn.Module):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
             for param_q, param_k in zip(self.student.projector.parameters(), self.teacher.projector.parameters()):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+            if self.doublehead:
+                for param_q, param_k in zip(self.student.projector2.parameters(), self.teacher.projector2.parameters()):
+                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
         
 
 
@@ -87,6 +121,11 @@ class FrameATSTLightningModule(LightningModule):
         super().__init__()
         self.model = FrameATST(arch=arch,
                                symmetric=symmetric,
+                               use_cls=use_cls,
+                               unmask_for_cls=unmask_for_cls,
+                               crop_ratio=crop_ratio,
+                               avg_blocks=avg_blocks,
+                               use_mse=use_mse,
                                **kwargs)
         self.learning_rate = learning_rate 
         self.warmup_steps =  warmup_steps

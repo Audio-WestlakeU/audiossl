@@ -49,7 +49,7 @@ def main(args):
     if args.train_mode=="cls":
         transform = ClsPromptTrainTransform()
     elif args.train_mode == "frame":
-        transform = FrameATSTTrainTransform()
+        transform = FrameATSTTrainTransform(**dict_args)
     elif args.train_mode == "cls+frame":
         transform = MixATSTTrainTransform()
     else:
@@ -57,6 +57,8 @@ def main(args):
 
     data = PromptPoolDataModule(queries=queries,transform=transform,**dict_args)
     model = PromptPoolLightningModule(prompt_key=c.cpu(),**dict_args)                            
+    print(model.model.teacher.encoder.framemodel.patch_h,model.model.teacher.encoder.framemodel.patch_w)
+    print(data.dataset.transform.patch_h,data.dataset.transform.patch_w)
     trainer:Trainer = Trainer(
                             strategy="ddp",
                             sync_batchnorm=True,
@@ -95,6 +97,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--stage1_ckpt_path",type=str,default="None")
     parser.add_argument("--train_mode",type=str,default="cls")
+    parser.add_argument('--patch_h', type=int,  default=64)
+    parser.add_argument('--patch_w', type=int,  default=4)
     parser.add_argument("--save_path",type=str)
     parser.add_argument("--query_model",type=str)
     parser.add_argument('--nproc', type=int,  default=2)
