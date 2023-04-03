@@ -148,8 +148,10 @@ def main():
     from audiossl.utils.common import bool_flag
 
     parser.add_argument("--n_last_blocks", type=int, default=12)
+    parser.add_argument("--finetune_n_last_blocks", type=int, default=1)
     parser.add_argument("--pretrained_ckpt_path", type=str,required=True)
     parser.add_argument("--samplewise_query", type=bool_flag, default=False)
+    parser.add_argument("--head", type=str, default="linear")
     parser.add_argument("--save_path", type=str,required=True)
     parser.add_argument("--mixup_training", type=bool_flag,default=False)
     parser.add_argument('--nproc', type=int,  default=1)
@@ -168,7 +170,8 @@ def main():
                                                         None,
                                                         6.,
                                                         args.n_last_blocks,
-                                                        samplewise_query=args.samplewise_query)
+                                                        samplewise_query=args.samplewise_query,
+                                                        scene=True if args.head=="linear" else False)
     elif hasattr(pretrained_encoder,"nprompt"):
         pretrained_module = PretrainedCLsPromptEncoderPLModule(pretrained_encoder,
                                                         6.,
@@ -177,7 +180,14 @@ def main():
         pretrained_module = PretrainedEncoderPLModule(pretrained_encoder,
                                                         6.,
                                                         args.n_last_blocks)
-    pretrained_module.unfreeze()
+    #pretrained_module.unfreeze()
+
+    for i in range(args.finetune_n_last_blocks):
+        block = pretrained_module.encoder.framemodel.blocks[-1-i]
+        for param in block.parameters():
+            param.requires_grad=True
+
+    pretrained_module.train()
     pretrained_module.encoder.prompt_hgram.requires_grad=False
     pretrained_module.encoder.prompt_keys.requires_grad=False
 

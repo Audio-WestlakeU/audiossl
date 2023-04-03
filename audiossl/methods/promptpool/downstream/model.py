@@ -1,6 +1,6 @@
 from email.mime import audio
 from pytorch_lightning import LightningModule
-from audiossl.modules.head import LinearHead
+from audiossl.modules.head import LinearHead, AttentionHead
 from audiossl.methods.promptpool import audio_transformer,prompt_tuning,prompt_pool
 import torch
 from torch import nn
@@ -109,15 +109,21 @@ class PretrainedPromptPoolEncoderPLModule(LightningModule):
                  chunk_len: float,
                  n_blocks: int,
                  avgpool:bool = True,
-                 samplewise_query:bool=False):
+                 samplewise_query:bool=False,
+                 scene=True):
         super().__init__()
         self.encoder = pretrained_encoder
         self.queries = queries
         self.chunk_len = int((chunk_len * 16000)/160 + 1)
         self.n_blocks = n_blocks
         self.avgpool = avgpool
-        self.embed_dim = self.encoder.embed_dim*2*n_blocks
+        if scene:
+            self.embed_dim = self.encoder.embed_dim*2*n_blocks
+        else:
+            self.embed_dim = self.encoder.embed_dim*n_blocks
+
         self.samplewise_query=samplewise_query
+        self.scene=scene
 
     def forward(self, batch):
         (mel, length),  y, key = batch
@@ -151,18 +157,22 @@ class PretrainedPromptPoolEncoderPLModule(LightningModule):
                 len_chunk = mel_chunk.shape[-1] #if length>end+chunk_len else (length - end)
                 len_chunk = torch.tensor([len_chunk]).cuda().expand(mel.shape[0])
                 #query =self.query.to('cuda').unsqueeze(0).expand(mel_chunk.shape[0],-1)
-                output_cls_chunk,output_frame_chunk = self.encoder.get_last_n_blocks(mel_chunk,cur_len,queries,n=self.n_blocks)
+                output_cls_chunk,output_frame_chunk = self.encoder.get_last_n_blocks(mel_chunk,cur_len,queries,n=self.n_blocks,scene=self.scene)
 
                 output_cls.append(output_cls_chunk)
                 output_frame.append(output_frame_chunk)
                 chunk_mark.append(chunk_mark_)
-        chunk_mark=torch.stack(chunk_mark,dim=0).unsqueeze(-1)
-        output_cls=torch.stack(output_cls,dim=0)
-        output_cls = torch.sum(chunk_mark*output_cls,dim=0)/torch.sum(chunk_mark,dim=0)
-        output_frame=torch.stack(output_frame,dim=0)
-        output_frame = torch.sum(chunk_mark*output_frame,dim=0)/torch.sum(chunk_mark,dim=0)
-        output = torch.cat([output_cls,output_frame],dim=1)
-        return output, y
+        if self.scene:
+            chunk_mark=torch.stack(chunk_mark,dim=0).unsqueeze(-1)
+            output_cls=torch.stack(output_cls,dim=0)
+            output_cls = torch.sum(chunk_mark*output_cls,dim=0)/torch.sum(chunk_mark,dim=0)
+            output_frame=torch.stack(output_frame,dim=0)
+            output_frame = torch.sum(chunk_mark*output_frame,dim=0)/torch.sum(chunk_mark,dim=0)
+            output = torch.cat([output_cls,output_frame],dim=1)
+            return output, y
+        else:
+            output = torch.cat(output_frame,dim=1)
+            return output, y
 
 
 
@@ -173,12 +183,16 @@ class LinearClassifierPLModule(LightningModule):
                  embed_dim,
                  num_labels,
                  multi_label=False,
+                 head="linear",
                  **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
         self.max_epochs = max_epochs
 
-        self.head = LinearHead(embed_dim, num_labels)
+        if head=="linear":
+            self.head = LinearHead(embed_dim, num_labels)
+        else:
+            self.head = AttentionHead(embed_dim,256,4,num_labels)
         self.multi_label = multi_label
 
         if multi_label:
@@ -261,6 +275,7 @@ class FineTuningPLModule(LightningModule):
                  num_labels,
                  multi_label=False,
                  mixup_training=False,
+                 head="linear",
                  **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
@@ -269,7 +284,10 @@ class FineTuningPLModule(LightningModule):
         self.niter_per_epoch = niter_per_epoch
 
         self.encoder = encoder
-        self.head = LinearHead(encoder.embed_dim, num_labels,use_norm=True, affine=False)
+        if head=="linear":
+            self.head = LinearHead(encoder.embed_dim, num_labels,use_norm=True, affine=False)
+        else:
+            self.head = AttentionHead(encoder.embed_dim,256,4,num_labels)
         self.multi_label = multi_label
         self.mixup_training = mixup_training
         self.num_labels = num_labels

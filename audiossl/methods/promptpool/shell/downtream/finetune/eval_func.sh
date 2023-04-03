@@ -11,7 +11,9 @@ eval()
         local max_epochs=$7
         local warmup_epochs=$8
         local mixup_training=$9
-        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}
+	local head=${10}
+	local finetune_n_last_blocks=${11}
+        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_head_${head}_finetune_${finetune_n_last_blocks}
         
         local log=$save_path/verbose.txt
         
@@ -26,6 +28,7 @@ eval()
         #              --learning_rate $lr
         #              --save_path $save_path"
 
+        mkdir -p $save_path
         if [ $DEBUG -eq 1 ] 
         then 
             echo =============model===============: 
@@ -45,6 +48,8 @@ eval()
                       --warmup_epochs $warmup_epochs\
                       --mixup_training $mixup_training\
                       --nproc $NPROC\
+		      --head $head\
+		      --finetune_n_last_blocks ${finetune_n_last_blocks}\
                       --save_path $save_path 
 	    
             exit
@@ -60,7 +65,6 @@ eval()
                 echo data $data_path not exist!
                 exit
         fi
-        mkdir -p $save_path
         
 
         CUDA_VISIBLE_DEVICES=$DEVICE $cmd --n_last_blocks $n_last_blocks \
@@ -73,6 +77,8 @@ eval()
                       --warmup_epochs $warmup_epochs\
                       --mixup_training $mixup_training\
                       --nproc $NPROC\
+		      --head $head\
+		      --finetune_n_last_blocks ${finetune_n_last_blocks}\
                       --save_path $save_path > $log 2>&1
 }
 

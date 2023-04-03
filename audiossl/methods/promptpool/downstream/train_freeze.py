@@ -115,7 +115,7 @@ def run(args, pretrained_module:PretrainedPromptPoolEncoderPLModule, fold=None):
     dict_args = vars(args)
     logger_tb = TensorBoardLogger(save_path, name="tb_logs")
     #logger_wb = WandbLogger(save_dir=args.save_path,name="wb_logs")
-    embed_dim = x_train.shape[1]
+    embed_dim = x_train.shape[-1]
     num_labels = data.num_labels
     multi_label = data.multi_label
 
@@ -180,6 +180,7 @@ def main():
 
     parser.add_argument("--n_last_blocks", type=int, default=12)
     parser.add_argument("--samplewise_query", type=bool_flag, default=False)
+    parser.add_argument("--head", type=str, default="linear")
     parser.add_argument("--pretrained_ckpt_path", type=str)
     parser.add_argument("--save_path", type=str)
     parser.add_argument('--nproc', type=int,  default=1)
@@ -199,7 +200,8 @@ def main():
                                                         None,
                                                         6.,
                                                         args.n_last_blocks,
-                                                        samplewise_query=args.samplewise_query)
+                                                        samplewise_query=args.samplewise_query,
+                                                        scene=True if args.head=="linear" else False)
     elif hasattr(pretrained_encoder,"nprompt"):
         pretrained_module = PretrainedCLsPromptEncoderPLModule(pretrained_encoder,
                                                         6.,
