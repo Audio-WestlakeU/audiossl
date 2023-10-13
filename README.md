@@ -1,10 +1,20 @@
 # Audio Self Supervised Learning 
 
-Audiossl is a library built for audio self supervised learning. This library has two main usages: 
+Audiossl is developed as we implement our own audio self-supervised learning methods(see Methods below). This library provides general modules involved in audio pretraining, such as dataset loading, data transformation and etc.
 
-1. use existing pretrained model to extract audio represention for downstream tasks
+## Methods
+------------------------------
 
-2. provides general modules involved in audio pretraining, such as dataset loading, data transformation and etc.
+Two official implemented audio self-supervised methods are included:
+
+1. [ATST: Audio Representation Learning with Teacher-Student Transformer(INTERSPEECH2022)](https://arxiv.org/abs/2204.12076)
+
+    See [audiossl/methods/atst](audiossl/methods/atst)
+
+2. [Self-supervised Audio Teacher-Student Transformer
+for Both Clip-level and Frame-level Tasks(Under Review at TASLP)](https://arxiv.org/abs/2306.04186)
+
+    See [audiossl/methods/atstframe](audiossl/methods/atstframe)
 
 ## Install
 ------------------------
@@ -24,14 +34,6 @@ conda install pytorch=1.10.1 torchvision torchaudio cudatoolkit=11.3 -c pytorch 
     cd audiossl
     pip install .
 ```
-
-
-## Methods
-------------------------------
-
-1. ATST: Audio Representation Learning with Teacher-Student Transformer
-
-    See [audiossl/methods/atst](audiossl/methods/atst)
 
 ## Datasets
 --------------------------------
