@@ -8,16 +8,24 @@ from audiossl.transforms.common import MinMax
 def plot_spec(x,save_path):
     t = range(0,x.shape[0])
     f = range(0,x.shape[1])
+    #plt.xlabel('frequency',fontsize=20)
+    #plt.ylabel('time',fontsize=20)
+
+    plt.axis('off')
     plt.pcolormesh(x)
-    plt.xlabel('frequency',fontsize=20)
-    plt.ylabel('time',fontsize=20)
-    plt.savefig(save_path)
+    plt.xticks([])
+    plt.yticks([])
+    plt.margins(0,0)
+    #plt.xlabel('frequency',fontsize=20)
+    #plt.ylabel('time',fontsize=20)
+    
+    plt.savefig(save_path,dpi=500,pad_inches=-0.01,transparent=True)
     plt.close()
 
 def plot_att(attentions,save_path,name):
-    plot_spec(torch.sum(attentions[0,:,1:,1:],dim=0).cpu().numpy(),os.path.join(save_path,name+"att_headsum.png"))
+    plot_spec(torch.sum(attentions[0,:,:,:],dim=0).cpu().numpy(),os.path.join(save_path,name+"att_headsum.png"))
     for i in range(attentions.shape[1]):
-        plot_spec(attentions[0,i,1:,1:].cpu().numpy(),os.path.join(save_path,name+"att_head{}.png".format(i)))
+        plot_spec(attentions[0,i,:,:].cpu().numpy(),os.path.join(save_path,name+"att_head{}.png".format(i)))
         plt.imsave(fname=os.path.join(save_path,name+"att_head{}_imsave.png".format(i)),
                    arr=attentions[0,i].cpu().numpy(), 
                    format='png')
@@ -47,7 +55,7 @@ def get_pretraied_encoder(pretrained_ckpt_path):
     return pretrained_encoder
 
 def mel2att(mel,model):
-    return model.get_last_selfattention(mel[:,:,:601].unsqueeze(0))
+    return model.get_last_selfattention(mel[:,:,:101].unsqueeze(0))
 
 
 if __name__ == "__main__":
@@ -57,11 +65,12 @@ if __name__ == "__main__":
     print(ckpt_path,wav_file)
     model = get_pretraied_encoder(ckpt_path)
     mel = wav2mel(wav_file)
+    mel = mel[:,:,:101]
     att = mel2att(mel,model)
 
     os.makedirs(save_path,exist_ok=True)
 
-    plot_spec(mel[0].cpu().numpy().transpose(1,0),os.path.join(save_path,"mel.png"))
+    plot_spec(mel[0].cpu().numpy(),os.path.join(save_path,"mel.png"))
     print(len(att))
 	
     for i,att_ in enumerate(att):
