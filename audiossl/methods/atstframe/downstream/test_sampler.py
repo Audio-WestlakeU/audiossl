@@ -56,7 +56,10 @@ def get_labels(d):
 path = sys.argv[1]
 
 
-d = datasets.LMDBDataset(path, "train", subset=None, transform=Transform(),return_key=True)
+from torch.utils.data import ConcatDataset 
+dub = datasets.LMDBDataset(path, "train", subset=None, transform=Transform(),return_key=True)
+db = datasets.LMDBDataset(path + "../audioset_b", "train", subset=None, transform=Transform(),return_key=True)
+d = ConcatDataset([dub,db])
 #sampler=get_labels(d)
 extractor = EmbeddingExtractor(Lable(),1)
 result = extractor.extract(DataLoader(d,batch_size=512,num_workers=20,shuffle=False))
@@ -65,7 +68,7 @@ result = [r for r in zip(*result)]
 labels,keys=torch.cat(result[0],dim=0),list(sum(result[1],()))
 
 counts = torch.sum(labels,dim=0)
-weights_labels = torch.sum(labels*1/torch.sum(labels,dim=0),dim=-1)
+weights_labels = torch.sum(labels*1000/(torch.sum(labels,dim=0)+0.01),dim=-1)
 
 save_dict = {"keys":keys,"weights_labels":weights_labels}
-torch.save(save_dict,"weights_labels.pt4")
+torch.save(save_dict,"weights_labels.pt5")
