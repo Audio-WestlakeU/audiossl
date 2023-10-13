@@ -7,12 +7,12 @@ from audiossl import datasets
 from audiossl.lightning.datamodules import (DownstreamDataModule,
                                             get_inmemory_datamodule)
 from audiossl.lightning.utils import EmbeddingExtractor
-from audiossl.methods.pyramid.model import FrameATSTLightningModule
-from audiossl.methods.pyramid.downstream import utils
-from audiossl.methods.pyramid.downstream.data import collate_fn
-from audiossl.methods.pyramid.downstream.model import (
+from audiossl.methods.atstframe.model import FrameATSTLightningModule
+from audiossl.methods.atstframe.downstream import utils
+from audiossl.methods.atstframe.downstream.data import collate_fn
+from audiossl.methods.atstframe.downstream.model import (
     LinearClassifierPLModule, PretrainedEncoderPLModule )
-from audiossl.methods.pyramid.downstream.transform import \
+from audiossl.methods.atstframe.downstream.transform import \
     FreezingTransform
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -29,8 +29,14 @@ def get_pretraied_encoder(args):
     pretrained_model = FrameATSTLightningModule.load_from_checkpoint(
         args.pretrained_ckpt_path)
 
-    pretrained_encoder = pretrained_model.model.teacher.encoder
+    petrained_encoder=None
+    if args.use_encoder == "teacher":
+        pretrained_encoder = pretrained_model.model.teacher.encoder
+    else:
+        pretrained_encoder = pretrained_model.model.student.encoder
     pretrained_encoder.hyper_param = s['hyper_parameters']
+    if not ('win_length' in pretrained_encoder.hyper_param.keys()):
+        pretrained_encoder.hyper_param["win_length"] = 1024
     return pretrained_encoder
 
 
@@ -60,12 +66,13 @@ def run(args, pretrained_module, fold=None):
     dict_args = vars(args)
 
     """extract embedding"""
-    transform = FreezingTransform(n_mels=pretrained_module.encoder.hyper_param["n_mels"])
+    transform = FreezingTransform(n_mels=pretrained_module.encoder.hyper_param["n_mels"],
+                                  win_length=pretrained_module.encoder.hyper_param["win_length"])
     data = DownstreamDataModule(**dict_args,
                                 fold=fold,
                                 collate_fn=collate_fn,
                                 transforms=[transform]*3,
-                                limit_batch_size=min(512,args.batch_size_per_gpu))
+                                limit_batch_size=min(64,args.batch_size_per_gpu))
     x_train, y_train, x_val, y_val, x_test, y_test = extract_embedding(pretrained_module,
                                                                        data,
                                                                        args.nproc)
@@ -145,6 +152,7 @@ def main():
     parser.add_argument("--pretrained_ckpt_path", type=str)
     parser.add_argument("--save_path", type=str)
     parser.add_argument('--nproc', type=int,  default=1)
+    parser.add_argument('--use_encoder', type=str,  default="teacher")
     parser = LinearClassifierPLModule.add_model_specific_args(parser)
     parser = DownstreamDataModule.add_data_specific_args(parser)
 
