@@ -7,7 +7,7 @@ from functools import partial
 import time
 import warnings
 import math
-from audiossl.methods.pyramid import random_mask
+from audiossl.methods.atstframe import random_mask
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
     # Cut & paste from PyTorch official master until it's in a few official releases - RW
@@ -50,8 +50,28 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 
 
+
 def get_num_patches(height=64,width=1001,patch_height=16,patch_width=16):
     return (height // patch_height) * (width // patch_width)
+
+class PatchEmbed(nn.Module):
+    def __init__(self,patch_height=64,patch_width=4,embed_dim=768,input_dim=1):
+        super().__init__()
+        self.patch_height = patch_height
+        self.patch_width = patch_width
+        self.proj = nn.Conv2d(input_dim, embed_dim, kernel_size=(patch_height,patch_width), stride=(patch_height,patch_width))
+        
+    def forward(self,melspec,length=None):
+        height = melspec.shape[2] - melspec.shape[2]%self.patch_height
+        width = melspec.shape[3] - melspec.shape[3]%self.patch_width
+        patch_embed = self.proj(melspec).squeeze(2).permute(0,2,1)
+
+        if length is not None:
+            patch_length = (height//self.patch_height) * ((length - length%self.patch_width)//self.patch_width)
+        else:
+            patch_length = None
+
+        return None,patch_embed,patch_length
 
 from einops.layers.torch import Rearrange
 class PatchEmbed_v2(nn.Module):
@@ -78,9 +98,9 @@ class PatchEmbed_v2(nn.Module):
 
 class FrameAST(nn.Module):
     """ Vision Transformer """
-    def __init__(self,nprompt=0,spec_h=64,spec_w=1001, patch_w=16,patch_h=16,pos_type="cut", in_chans=1, num_classes=0, embed_dim=768, depth=12,
+    def __init__(self,nprompt=0,spec_h=64,spec_w=1001, patch_w=16,patch_h=16,pos_type="cut",avg_blocks=0, in_chans=1, num_classes=0, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0.1, norm_layer=nn.LayerNorm, **kwargs):
+                 drop_path_rate=0.1, norm_layer=nn.LayerNorm,patch_embed="Linear", **kwargs):
         super().__init__()
         self.num_features = self.embed_dim = embed_dim
         self.spec_w = spec_w
@@ -90,9 +110,16 @@ class FrameAST(nn.Module):
         self.patch_h = patch_h
 
         self.pos_type = pos_type
+        self.avg_blocks = avg_blocks
 
 
-        self.patch_embed = PatchEmbed_v2(patch_h,patch_w,embed_dim)
+        if patch_embed == "Linear":
+            self.patch_embed = PatchEmbed_v2(patch_h,patch_w,embed_dim)
+        elif patch_embed == "CNN":
+            self.patch_embed = PatchEmbed(patch_h,patch_w,embed_dim)
+        else:
+            raise NotImplementedError("patch_embed={} not implemted".format(patch_embed))
+
         self.mask_embed = nn.Parameter(torch.zeros(1,1, self.embed_dim))
 
         #hack
@@ -156,9 +183,32 @@ class FrameAST(nn.Module):
     def forward(self, x, mask_index=None,mask_input=True,length=None):
         x,pos,mel_patches,h,w,patch_length = self.prepare_tokens(x,mask_index,length,mask_input)
 
-        length_mask = torch.arange(mel_patches.shape[1]).to(x.device) < patch_length.unsqueeze(1)
+        length_mask = torch.arange(x.shape[1]).to(x.device) < patch_length.unsqueeze(1)
         length_mask = length_mask.to(x.device)
         mask_index = mask_index & length_mask
+
+        if self.nprompt > 0:
+            x = torch.cat([self.prompt_embed.expand(x.shape[0],-1,-1),x],dim=1)
+
+        avg_x = []
+        for i,blk in enumerate(self.blocks):
+            x = blk(x,patch_length+self.nprompt)
+            if self.avg_blocks > 0:
+                if i >= len(self.blocks)-self.avg_blocks  :
+                    avg_x.append(F.instance_norm(x.transpose(1,2)).transpose(1,2))
+
+        if self.avg_blocks > 0:
+            avg_x=torch.mean(torch.stack(avg_x),dim=0)
+            frame_repr = avg_x
+        else:
+            frame_repr = self.norm_frame(x)
+
+
+        return frame_repr[:,self.nprompt:][mask_index]
+
+    def get_cls(self, x,length=None):
+        x,pos,mel_patches,h,w,patch_length = self.prepare_tokens(x,None,length,False)
+
 
         if self.nprompt > 0:
             x = torch.cat([self.prompt_embed.expand(x.shape[0],-1,-1),x],dim=1)
@@ -169,7 +219,7 @@ class FrameAST(nn.Module):
         frame_repr = self.norm_frame(x)
 
 
-        return frame_repr[:,self.nprompt:][mask_index]
+        return torch.mean(frame_repr[:,:self.nprompt],dim=1)
         
     def interpolate_pos_encoding(self, x, h, w):
         npatch = x.shape[1] - 1
@@ -226,7 +276,7 @@ class FrameAST(nn.Module):
                     if self.nprompt>0:
                         output.append(torch.mean(x[:,:self.nprompt],dim=1))
                 else:
-                    output.append(x[:,self.nprompt:])
+                    output.append(norm_x(x[:,self.nprompt:]))
 
         return torch.cat(output,dim=-1)
 

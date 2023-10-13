@@ -1,7 +1,7 @@
 from torch import nn
 from pytorch_lightning import LightningModule
 from audiossl.models.atst.audio_transformer import AST_base, AST_small
-from audiossl.methods.pyramid.audio_transformer import FrameAST_base
+from audiossl.methods.atstframe.audio_transformer import FrameAST_base
 import argparse
 import torch
 from audiossl.utils.common import cosine_scheduler_epoch,get_params_groups
@@ -18,7 +18,7 @@ from torch.nn import functional as F
 import numpy as np
 random.seed(1234)
 from audiossl.transforms.byol_a import Mixup, RandomResizeCrop
-from audiossl.methods.pyramid.byol import build_mlp
+from audiossl.methods.atstframe.byol import build_mlp
 from audiossl.methods.atst.downstream.utils import Metric
 from torch.utils.data import WeightedRandomSampler
 from audiossl.lightning.datamodules import DistributedSamplerWrapper

@@ -23,8 +23,10 @@ class FrameATSTDataModule(LightningDataModule):
                  batch_size_per_gpu=256,
                  num_workers=10,
                  subset=200000,
+                 win_length=1024,
                  aug_tea=True,
                  aug_stu=True,
+                 freq_wrap=True,
                  mask_ratio=0.75,
                  mask_type="block",
                  anchor_len=6.,
@@ -34,11 +36,33 @@ class FrameATSTDataModule(LightningDataModule):
                  **kwargs,
                  ):
         super().__init__()
-        self.dataset=LMDBDataset(data_path,
+        import os
+        from torch.utils.data import ConcatDataset
+
+        dataset_ub=LMDBDataset(data_path,
                                  split="train",
                                  subset=subset,
-                                 transform=FrameATSTTrainTransform(aug_tea=aug_tea,
+                                 transform=FrameATSTTrainTransform(
+                                                                   win_length=win_length,
+                                                                   aug_tea=aug_tea,
                                                                    aug_stu=aug_stu,
+                                                                   freq_wrap=freq_wrap,
+                                                                   mask_ratio=mask_ratio,
+                                                                   anchor_len=anchor_len,
+                                                                   mask_type=mask_type,
+                                                                   mask_len=mask_len,
+                                                                   min_mask_len=min_mask_len,
+                                                                   n_mels=n_mels,
+                                                                   **kwargs))
+        """
+        dataset_b=LMDBDataset(os.path.join(data_path,"../audioset_b"),
+                                 split="train",
+                                 subset=subset,
+                                 transform=FrameATSTTrainTransform(
+                                                                   win_length=win_length,
+                                                                   aug_tea=aug_tea,
+                                                                   aug_stu=aug_stu,
+                                                                   freq_wrap=freq_wrap,
                                                                    mask_ratio=mask_ratio,
                                                                    anchor_len=anchor_len,
                                                                    mask_type=mask_type,
@@ -47,6 +71,11 @@ class FrameATSTDataModule(LightningDataModule):
                                                                    n_mels=n_mels,
                                                                    **kwargs))
 
+        self.dataset = ConcatDataset([dataset_ub,dataset_b])
+        """
+
+        # we only use unbalanced set for self supervised pretraining
+        self.dataset = dataset_ub
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
         self.save_hyperparameters()
@@ -68,8 +97,10 @@ class FrameATSTDataModule(LightningDataModule):
             help='Per-GPU batch-size : number of distinct samples loaded on one GPU.')
         parser.add_argument('--num_workers', default=10, type=int, help='Number of data loading workers per GPU.')
         parser.add_argument('--subset', default=200000, type=int, help='subset of training data')
+        parser.add_argument('--win_length', default=1024, type=int, help='windown length')
         parser.add_argument('--aug_tea', default=True, type=bool_flag, help='whether to augment teacher view')
         parser.add_argument('--aug_stu', default=True, type=bool_flag, help='whether to augment student view')
+        parser.add_argument('--freq_wrap', default=True, type=bool_flag, help='freq wraping or not')
         parser.add_argument('--anchor_len',default=6.,type=float,help="length of training samples")
         parser.add_argument('--mask_ratio',default=0.75,type=float,help="masking ratio")
         parser.add_argument('--mask_len',default=5,type=int,help="masking block length")

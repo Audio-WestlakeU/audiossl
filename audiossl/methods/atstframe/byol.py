@@ -96,11 +96,19 @@ class MultiCropWrapper(nn.Module):
     """
     def __init__(self, encoder,
                  embed_dim, 
+                 projector="mlp",
                  predictor=True):
         super(MultiCropWrapper, self).__init__()
         # disable layers dedicated to ImageNet labels classification
+
         self.encoder = encoder
-        self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
+        if projector == "mlp":
+            self.projector = build_mlp(2,embed_dim,4096,256,last_bn=False)
+        elif projector == "linear": 
+            self.projector = nn.Linear(embed_dim,embed_dim)
+        else:
+            self.projector = nn.Identity()
+
 
         if predictor:
             self.predictor=build_mlp(2,256,4096,256,last_bn=False)
