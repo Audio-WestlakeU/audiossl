@@ -11,13 +11,21 @@ eval()
         local max_epochs=$7
         local warmup_epochs=$8
         local mixup_training=$9
-        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_mixup${mixup_training}_max_epochs${max_epochs}
-        
+	local mask_aug=${10}
+	local rrc=${11}
+	local layerwise_lr=${12}
+	local freeze_embed=${13}
+	local mixup_ratio=${14}
+	local alpha=${15}
+	local roll_mag=${16}
+    local use_encoder=${17}
+        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_mixup${mixup_training}_max_epochs${max_epochs}_rrc${rrc}_layerwiselr${layerwise_lr}_maskaug${mask_aug}_freeze_embed${freeze_embed}_mixup_ratio${mixup_ratio}_alpha${alpha}_roll_mag${roll_mag}_use_encoder$use_encoder
+
         local log=$save_path/verbose.txt
-        
 
 
-        #cmd_str="CUDA_VISIBLE_DEVICES=$DEVICE $cmd --n_last_blocks $n_last_blocks 
+
+        #cmd_str="CUDA_VISIBLE_DEVICES=$DEVICE $cmd --n_last_blocks $n_last_blocks
         #              --batch_size_per_gpu $batch_size
         #              --dataset_name $ds_name
         #              --data_path $data_path
@@ -26,11 +34,11 @@ eval()
         #              --learning_rate $lr
         #              --save_path $save_path"
 
-        if [ $DEBUG -eq 1 ] 
-        then 
-            echo =============model===============: 
+        if [ $DEBUG -eq 1 ]
+        then
+            echo =============model===============:
             echo $pretraind_ckpt_path
-            echo =============output_dir==========: 
+            echo =============output_dir==========:
             echo $save_path
             echo ===============log===============:
             echo $log
@@ -44,11 +52,19 @@ eval()
                       --max_epochs $max_epochs\
                       --warmup_epochs $warmup_epochs\
                       --mixup_training $mixup_training\
+		      --rrc $rrc\
+		      --layerwise_lr $layerwise_lr\
+		      --freeze_embed $freeze_embed\
+		      --mixup_ratio $mixup_ratio\
+		      --alpha $alpha \
+		      --mask_aug $mask_aug\
+		      --roll_mag $roll_mag\
+              --use_encoder $use_encoder \
                       --nproc $NPROC\
-                      --save_path $save_path 
-	    
+                      --save_path $save_path
+
             exit
-    
+
         fi
 
         if [ ! -s $pretraind_ckpt_path ];then
@@ -61,7 +77,7 @@ eval()
                 exit
         fi
         mkdir -p $save_path
-        
+
 
         CUDA_VISIBLE_DEVICES=$DEVICE $cmd --n_last_blocks $n_last_blocks \
                       --batch_size_per_gpu $batch_size\
@@ -72,6 +88,14 @@ eval()
                       --max_epochs $max_epochs\
                       --warmup_epochs $warmup_epochs\
                       --mixup_training $mixup_training\
+		      --rrc $rrc\
+		      --layerwise_lr $layerwise_lr\
+		      --freeze_embed $freeze_embed\
+		      --mixup_ratio $mixup_ratio \
+		      --alpha $alpha\
+		      --mask_aug $mask_aug\
+		      --roll_mag $roll_mag\
+              --use_encoder $use_encoder \
                       --nproc $NPROC\
                       --save_path $save_path > $log 2>&1
 }
