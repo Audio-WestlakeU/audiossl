@@ -2,6 +2,10 @@ from pytorch_lightning import LightningDataModule
 import torch
 from torch.utils import data
 from audiossl import datasets
+import numpy as np
+import torch.distributed as dist
+import os
+from torch.utils.data import ConcatDataset
 
 def get_inmemory_datamodule(x_train,
                             y_train,
@@ -165,10 +169,21 @@ class DownstreamDataModule(LightningDataModule):
                                                       transforms[2],
                                                       target_transform=target_transforms[2])
         else:
-            self.dataset_train = dataset_info.creator(data_path,
-                                                      "train",
-                                                      transforms[0],
-                                                      target_transform=target_transforms[0])
+            if self.dataset_name == "audioset":
+                dataset_ub = dataset_info.creator(data_path,
+                                                        "train",
+                                                        transforms[0],
+                                                        target_transform=target_transforms[0])
+                dataset_b = dataset_info.creator(os.path.join(data_path,"../audioset_b"),
+                                                        "train",
+                                                        transforms[0],
+                                                        target_transform=target_transforms[0])
+                self.dataset_train = ConcatDataset([dataset_ub,dataset_b])
+            else:
+                self.dataset_train = dataset_info.creator(data_path,
+                                                        "train",
+                                                        transforms[0],
+                                                        target_transform=target_transforms[0])
             self.dataset_val = dataset_info.creator(data_path,
                                                       "valid",
                                                       transforms[1],
@@ -177,7 +192,7 @@ class DownstreamDataModule(LightningDataModule):
                                                       "test",
                                                       transforms[2],
                                                       target_transform=target_transforms[2])
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore="target_transforms")
     def prepare_data(self):
         pass
 
@@ -194,7 +209,12 @@ class DownstreamDataModule(LightningDataModule):
                 collate_fn=self.collate_fn,
                 pin_memory=True,
                 )
-        elif self.dataset_name == "audioset":
+        elif self.dataset_name == "audioset" and (self.sampler is not None):
+            def worker_init_fn(id):
+                # seed every worker with different seed
+                # so that they don't all get the same samples for MixUp 
+                rank = dist.get_rank()
+                np.random.seed((id + rank +  np.random.get_state()[1][0])%(2**32))
             return data.DataLoader(
                 self.dataset_train,
                 batch_size=self.batch_size,
@@ -203,6 +223,7 @@ class DownstreamDataModule(LightningDataModule):
                 sampler= DistributedSamplerWrapper( self.sampler,range(len(self.sampler))),
                 drop_last=False,
                 collate_fn=self.collate_fn,
+                worker_init_fn=worker_init_fn,
                 pin_memory=True
                 )
 
