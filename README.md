@@ -11,6 +11,12 @@ Audiossl is a library built for audio self supervised learning. This library has
 
 1. install pytorch ( version 1.10.1 or higher )
 
+
+```
+conda install pytorch=1.10.1 torchvision torchaudio cudatoolkit=11.3 -c pytorch -c nvidia   
+
+```
+
 2. install audiossl
 
 ```

@@ -1,4 +1,4 @@
-from assl import dataset
+import dataset
 
 if __name__ == "__main__":
 
