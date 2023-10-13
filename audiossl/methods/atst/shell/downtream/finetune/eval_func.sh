@@ -11,7 +11,12 @@ eval()
         local max_epochs=$7
         local warmup_epochs=$8
         local mixup_training=$9
-        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_mixup_${mixup_training}_max_epochs${max_epochs}
+	local mask_aug=${10}
+	local rrc=${11}
+	local layerwise_lr=${12}
+	local alpha=${13}
+        local save_path=`dirname $pretrained_ckpt_path`/${ds_name}/last_blocks_${n_last_blocks}_batchsize${batch_size}_lr${lr}_mixup_${mixup_training}_max_epochs${max_epochs}_rrc${rrc}_layerwiselr${layerwise_lr}_maskaug${mask_aug}_alpha${alpha}
+
         
         local log=$save_path/verbose.txt
         
@@ -44,6 +49,10 @@ eval()
                       --max_epochs $max_epochs\
                       --warmup_epochs $warmup_epochs\
                       --mixup_training $mixup_training\
+		      --rrc $rrc\
+		      --layerwise_lr $layerwise_lr\
+		      --mask_aug $mask_aug\
+		      --alpha $alpha\
                       --nproc $NPROC\
                       --save_path $save_path 
 	    
@@ -72,6 +81,10 @@ eval()
                       --max_epochs $max_epochs\
                       --warmup_epochs $warmup_epochs\
                       --mixup_training $mixup_training\
+		      --rrc $rrc\
+		      --layerwise_lr $layerwise_lr\
+		      --mask_aug $mask_aug\
+		      --alpha $alpha\
                       --nproc $NPROC\
                       --save_path $save_path > $log 2>&1
 }
