@@ -10,8 +10,9 @@ random.seed(1234)
 from copy import deepcopy
 
 class LMDBDataset(data.Dataset):
-    def __init__(self, db_path,split, subset=None, transform=None, target_transform=None):
+    def __init__(self, db_path,split, subset=None, transform=None, target_transform=None, return_key = False):
         self.db_path = db_path
+        self.return_key = return_key
         lmdb_path = None
         if split=="train":
             lmdb_path = os.path.join(self.db_path,"train.lmdb")
@@ -49,7 +50,7 @@ class LMDBDataset(data.Dataset):
 
     def __getitem__(self, index):
         env = self.env
-
+        key = self.keys[index]
         byteflow = self.txn.get(self.keys[index])
         unpacked = pa.deserialize(byteflow)
 
@@ -70,9 +71,15 @@ class LMDBDataset(data.Dataset):
                 transformed[0],label = self.target_transform(transformed[0],label)
                 transformed = tuple(transformed)
         
-            return transformed, label 
+            if self.return_key:
+                return transformed, label, key 
+            else:
+                return transformed, label 
         else:
-            return waveform, label
+            if self.return_key:
+                return waveform, label , key
+            else:
+                return waveform, label
     def cycle(self):
         if self.start + self.subset > len(self.org_keys):
             self.keys = self.org_keys[self.start:] + self.org_keys[:self.start+self.subset - len(self.org_keys)]

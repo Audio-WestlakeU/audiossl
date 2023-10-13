@@ -13,7 +13,7 @@ from audiossl.methods.atst.downstream.data import collate_fn
 from audiossl.methods.atst.downstream.model import (
     FineTuningPLModule, PretrainedEncoderPLModule)
 from audiossl.methods.atst.downstream.transform import \
-    FreezingTransform, FinetuneTargetTransform, FinetuneTrainTransform, FinetuneEvalTransform
+    FreezingTransform, FinetuneTargetTransform, FinetuneTrainTransform, FinetuneEvalTransform, FinetuneTargetTransformAudioset
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -26,7 +26,7 @@ def get_pretraied_encoder(args):
     # get pretrained encoder
     dict_args = vars(args)
 
-    s = torch.load(args.pretrained_ckpt_path)
+    s = torch.load(args.pretrained_ckpt_path,map_location="cpu")
 
     if 'pytorch-lightning_version' in s.keys():
         pretrained_model = ATSTLightningModule.load_from_checkpoint(
@@ -59,10 +59,39 @@ def run(args, pretrained_module, fold=None):
     train_transform = FinetuneTrainTransform()
     eval_trainsform = FinetuneEvalTransform()
     if args.mixup_training:
-        target_transform = FinetuneTargetTransform(num_classes=datasets.get_dataset(args.dataset_name).num_labels)
+        target_transform = FinetuneTargetTransform(num_classes=datasets.get_dataset(args.dataset_name).num_labels,
+                                                   alpha=args.alpha)
     else:
         target_transform = None
-    data = DownstreamDataModule(**dict_args,
+    if args.dataset_name == "audioset":
+        s = torch.load(os.path.join(args.data_path,"weights_labels.pt"),map_location="cpu")
+        weights = s["weights_labels"]
+        keys = s["keys"]
+        from torch.utils.data import WeightedRandomSampler
+        #sampler = WeightedRandomSampler(weights, 20000, replacement=False)
+        sampler = WeightedRandomSampler(weights, len(weights) )
+        
+        data_ = DownstreamDataModule(**dict_args,
+                                    batch_size=args.batch_size_per_gpu,
+                                    fold=fold,
+                                    collate_fn=collate_fn,
+                                    transforms=[train_transform,eval_trainsform,eval_trainsform],
+                                    target_transforms=[None,None,None],
+                                    sampler=None)
+        target_transform = FinetuneTargetTransformAudioset(dataset=data_.dataset_train,
+                                                           is_mask_aug= args.mask_aug,
+                                                           is_rrc = args.rrc,
+                                                           num_classes=datasets.get_dataset(args.dataset_name).num_labels)
+        data = DownstreamDataModule(**dict_args,
+                                    batch_size=args.batch_size_per_gpu,
+                                    fold=fold,
+                                    collate_fn=collate_fn,
+                                    transforms=[train_transform,eval_trainsform,eval_trainsform],
+                                    target_transforms=[target_transform,None,None],
+                                    sampler=sampler)
+        #data.dataset_train.keys = keys
+    else:
+        data = DownstreamDataModule(**dict_args,
                                 batch_size=args.batch_size_per_gpu,
                                 fold=fold,
                                 collate_fn=collate_fn,
@@ -82,15 +111,16 @@ def run(args, pretrained_module, fold=None):
         encoder=pretrained_module,
         num_labels=num_labels,
         multi_label=multi_label,
-        niter_per_epoch=len(data.train_dataloader())//args.nproc+1,
+        niter_per_epoch=(len(data.dataset_train)//args.batch_size_per_gpu)//args.nproc+1,
+        layer_wise_lr = args.layerwise_lr,
         **dict_args)
     ckpt_cb = ModelCheckpoint(dirpath=save_path,
                               every_n_epochs=1,
                               filename="checkpoint-{epoch:05d}",
                               save_last=True,
-                              monitor="val_" + model.metric.mode,
-                              mode="max",
-                              save_top_k=10,
+                              monitor="val_" + model.metric.mode if ("audioset" in args.dataset_name) else None,
+                              mode="max" ,
+                              save_top_k=10 if ("audioset" in args.dataset_name) else 1,
                               )
     trainer: Trainer = Trainer(
         strategy="ddp",
@@ -99,6 +129,8 @@ def run(args, pretrained_module, fold=None):
         gradient_clip_val=3.0,
         max_epochs=args.max_epochs,
         logger=logger_tb,  # ,logger_wb],
+        replace_sampler_ddp=False if args.dataset_name == "audioset" else True,
+        check_val_every_n_epoch=1 if args.dataset_name == "audioset" else 10,
         callbacks=[
             ckpt_cb,
             LearningRateMonitor(logging_interval="step"),
@@ -107,10 +139,15 @@ def run(args, pretrained_module, fold=None):
     last_ckpt = os.path.join(save_path, "last.ckpt")
     trainer.fit(model, datamodule=data,
                 ckpt_path=last_ckpt if os.path.exists(last_ckpt) else None)
+    
     trainer.test(model, datamodule=data,
-                 ckpt_path=ckpt_cb.best_model_path)
+                 ckpt_path=last_ckpt)
     score = trainer.logged_metrics["test_"+model.metric.mode]
     print("test score {}".format(score))
+    if (trainer.num_devices > 1):
+        print("Note this score is not correct for unevenly distributed data due to DDP")
+        print("To get the correct score, please run the script again with --nproc 1")
+    return score
     return score
 
 
@@ -133,6 +170,10 @@ def main():
     parser.add_argument("--pretrained_ckpt_path", type=str,required=True)
     parser.add_argument("--save_path", type=str,required=True)
     parser.add_argument("--mixup_training", type=bool_flag,default=False)
+    parser.add_argument("--layerwise_lr", type=bool_flag,default=False)
+    parser.add_argument("--mask_aug", type=bool_flag,default=False)
+    parser.add_argument("--rrc", type=bool_flag,default=False)
+    parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument('--nproc', type=int,  default=1)
     parser = FineTuningPLModule.add_model_specific_args(parser)
     parser = DownstreamDataModule.add_data_specific_args(parser)

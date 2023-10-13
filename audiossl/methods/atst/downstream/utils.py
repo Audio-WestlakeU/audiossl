@@ -7,6 +7,7 @@ import torch
 import sys
 import time
 import datetime
+import numpy as np
 
 
 
@@ -90,6 +91,52 @@ def accuracy(output, target, topk=(1,)):
     correct = pred.eq(target.reshape(1, -1).expand_as(pred))
     return [correct[:k].reshape(-1).float().sum(0) * 100. / batch_size for k in topk]
 
+from torch import Tensor
+from torch.nn import functional as F  # noqa: N812
+from typing import Any, List, Optional
+
+def gather_all_tensors(result: Tensor, group: Optional[Any] = None) -> List[Tensor]:
+    """Gather all tensors from several ddp processes onto a list that is broadcasted to all processes.
+    Works on tensors that have the same number of dimensions, but where each dimension may differ. In this case
+    tensors are padded, gathered and then trimmed to secure equal workload for all processes.
+    Args:
+        result: the value to sync
+        group: the process group to gather results from. Defaults to all processes (world)
+    Return:
+        gathered_result: list with size equal to the process group where
+            ``gathered_result[i]`` corresponds to result tensor from process ``i``
+    """
+    if group is None:
+        group = torch.distributed.group.WORLD
+
+    # convert tensors to contiguous format
+    result = result.contiguous()
+
+    world_size = torch.distributed.get_world_size(group)
+    torch.distributed.barrier(group=group)
+
+
+    # 1. Gather sizes of all tensors
+    local_size = torch.tensor(result.shape, device=result.device)
+    local_sizes = [torch.zeros_like(local_size) for _ in range(world_size)]
+    torch.distributed.all_gather(local_sizes, local_size, group=group)
+    max_size = torch.stack(local_sizes).max(dim=0).values
+    all_sizes_equal = all(all(ls == max_size) for ls in local_sizes)
+
+
+    pad_dims = []
+    pad_by = (max_size - local_size).detach().cpu()
+    for val in reversed(pad_by):
+        pad_dims.append(0)
+        pad_dims.append(val.item())
+    result_padded = F.pad(result, pad_dims)
+    gathered_result = [torch.zeros_like(result_padded) for _ in range(world_size)]
+    torch.distributed.all_gather(gathered_result, result_padded, group)
+    for idx, item_size in enumerate(local_sizes):
+        slice_param = [slice(dim_size) for dim_size in item_size]
+        gathered_result[idx] = gathered_result[idx][slice_param]
+    return gathered_result
+
 import numpy as np
 from sklearn import metrics
 class Metric:
@@ -105,12 +152,25 @@ class Metric:
         self.preds = []
         self.targets = []
     def compute(self):
-        preds = np.concatenate(self.preds,axis=0)
-        targets = np.concatenate(self.targets,axis=0)
+        preds = torch.cat(self.preds)
+        targets = torch.cat(self.targets)
+        print(preds.shape,targets.shape)
+        preds=gather_all_tensors(preds) 
+        targets=gather_all_tensors(targets) 
+        preds = torch.cat(preds)
+        targets = torch.cat(targets)
+        print(preds.shape,targets.shape)
+        preds = preds.cpu().numpy()
+        targets = targets.cpu().numpy()
         if self.mode == "mAP":
             mAPs =[]
             for i in range(preds.shape[-1]):
                 mAPs.append(metrics.average_precision_score(targets[:,i],preds[:,i],average=None))
+            mAPs = np.array(mAPs)
+            _mAPs = mAPs[np.isnan(mAPs)]
+            print(mAPs)
+            print("============{}================= nans".format(len(_mAPs)))
+            mAPs = mAPs[~np.isnan(mAPs)]
             mAP = np.mean(mAPs)
             return mAP
         else:

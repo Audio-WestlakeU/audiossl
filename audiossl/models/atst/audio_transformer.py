@@ -236,12 +236,16 @@ class AST(nn.Module):
 
     def get_last_selfattention(self, x):
         x,_,_,_,_,_ = self.prepare_tokens(x,mask_index=None,length=None,mask=False)
+
+        atts=[]
         for i, blk in enumerate(self.blocks):
             if i < len(self.blocks) - 1:
-                x = blk(x)
+                x,att = blk(x,return_attention=True)
+                atts.append(att)
             else:
-                # return attention of the last block
-                return blk(x, return_attention=True)
+                x,att = blk(x, return_attention=True)
+                atts.append(att)
+                return atts
     def get_intermediate_layers(self, x,length, n=1):
         x,_,_,_,_,patch_length = self.prepare_tokens(x,mask_index=None,length=length,mask=False)
         # we return the output tokens from the `n` last blocks
@@ -264,7 +268,7 @@ class AST(nn.Module):
                 output.append(self.norm(x_))
         return output
         
-    def get_intermediate_layers_chunks(self, x,length, n=1,  chunk_len=401, avgpool=True):
+    def get_intermediate_layers_chunks(self, x,length, n=1,  chunk_len=601, avgpool=True):
         total_len = x.shape[-1]
         num_chunks = total_len // chunk_len + 1
         cls = []

@@ -13,15 +13,15 @@ def main(args):
     args.learning_rate = args.learning_rate*args.nproc*args.batch_size_per_gpu/256
     dict_args = vars(args)
     logger_tb = TensorBoardLogger(args.save_path,name="tb_logs")
-    logger_wb = WandbLogger(save_dir=args.save_path,name="wb_logs")
-    model = ATSTLightningModule(**dict_args)                            
+    #logger_wb = WandbLogger(save_dir=args.save_path,name="wb_logs")
+    model = ATSTLightningModule(**dict_args)
     data = ATSTDataModule(**dict_args)
     trainer:Trainer = Trainer(
                             strategy="ddp",
                             sync_batchnorm=True,
                             gpus=args.nproc,
                             max_steps=args.max_steps,
-                            logger=[logger_tb,logger_wb],
+                            logger=[logger_tb],#,logger_wb],
                             callbacks=[ModelCheckpoint(dirpath=args.save_path,
                                                        every_n_epochs=20,
                                                        filename="checkpoint-{epoch:05d}",
@@ -30,7 +30,7 @@ def main(args):
                                        LearningRateMonitor(logging_interval="step"),
                                       ],
                             )
-    last_ckpt = os.path.join(args.save_path,"last.ckpt") 
+    last_ckpt = os.path.join(args.save_path,"last.ckpt")
     trainer.fit(model,datamodule=data,
                 ckpt_path=last_ckpt if  os.path.exists(last_ckpt) else None)
 

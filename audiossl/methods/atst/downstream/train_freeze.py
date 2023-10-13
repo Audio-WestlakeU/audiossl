@@ -77,7 +77,7 @@ def run(args, pretrained_module, fold=None):
                                 fold=fold,
                                 collate_fn=collate_fn,
                                 transforms=[transform]*3,
-                                limit_batch_size=min(512,args.batch_size_per_gpu))
+                                limit_batch_size=min(64,args.batch_size_per_gpu))
     x_train, y_train, x_val, y_val, x_test, y_test = extract_embedding(pretrained_module,
                                                                        data,
                                                                        args.nproc)

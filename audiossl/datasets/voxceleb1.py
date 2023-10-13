@@ -24,7 +24,7 @@ CACHE_PATH = os.path.join(os.path.dirname(__file__), '.cache/')
 # Voxceleb 1 Speaker Identification
 
 class SpeakerClassifiDataset(Dataset):
-    def __init__(self, mode, file_path, meta_data, max_timestep=None,sr=16000, transform=None, target_transform=None):
+    def __init__(self, mode, file_path, meta_data, max_timestep=None,sr=16000, transform=None, target_transform=None,return_key=False):
 
         self.root = file_path
         self.speaker_num = 1251
@@ -33,6 +33,7 @@ class SpeakerClassifiDataset(Dataset):
         self.sr=sr
         self.transform = transform
         self.target_transform = target_transform
+        self.return_key = return_key
         self.usage_list = open(self.meta_data, "r").readlines()
 
         cache_path = os.path.join(CACHE_PATH, f'{mode}.pkl')
@@ -128,6 +129,8 @@ class SpeakerClassifiDataset(Dataset):
         path = self.dataset[idx]
 
         if self.transform is None:
+            if self.return_key:
+                return wav, self.label[idx], self.dataset[idx]
 
             return wav, self.label[idx]
         else:
@@ -137,6 +140,8 @@ class SpeakerClassifiDataset(Dataset):
                 wav = list(wav)
                 wav[0],label=self.target_transform(wav[0],label)
                 wav = tuple(wav)
+            if self.return_key:
+                return wav,label,self.dataset[idx]
             return wav,label
 
         

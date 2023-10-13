@@ -94,11 +94,12 @@ class Block(nn.Module):
             mask_att = None
 
         y, attn = self.attn(self.norm1(x),mask_att)
-        if return_attention:
-            return attn
         x = x + self.drop_path(y)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-        return x
+        if return_attention:
+            return x,attn
+        else:
+            return x
 
 def get_attention_mask(x,length):
     batch_size, max_len, _ = x.shape

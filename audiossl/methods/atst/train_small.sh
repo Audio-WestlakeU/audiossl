@@ -7,7 +7,7 @@ lr=5e-4
 nproc=3
 data_path=$1
 save_path=$2
-devices=1,2,3
+devices=0,1,2
 mkdir -p $save_path
 CUDA_VISIBLE_DEVICES=$devices python train.py \
                     --data_path $data_path  \
