@@ -216,6 +216,9 @@ class FineTuningPLModule(LightningModule):
         x,y=self.encoder(batch)
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y = y.argmax(-1)
+
+        if self.mixup_training == True and (y.dim() == 0 or y.dim()==1) :
+            y = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         
         x = self.head(x)
         loss = self.loss_fn(x,y)
@@ -247,7 +250,7 @@ class FineTuningPLModule(LightningModule):
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
-        if self.mixup_training == True and y.dim() == 0 :
+        if self.mixup_training == True and (y.dim() == 0 or y.dim()==1) :
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
         loss = self.loss_fn(x,y_)
@@ -266,7 +269,7 @@ class FineTuningPLModule(LightningModule):
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
-        if self.mixup_training == True and y.dim() == 0 :
+        if self.mixup_training == True and (y.dim() == 0 or y.dim()==1) :
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
         loss = self.loss_fn(x,y_)

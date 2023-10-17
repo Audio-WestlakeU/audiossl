@@ -38,7 +38,6 @@ class PretrainedEncoderPLModule(LightningModule):
         num_chunks = total_len // chunk_len + 1
         output=[]
         chunk_mark=[]
-        print("num_chunks=================",num_chunks,mel.shape[-1])
         for i in range(num_chunks):
 
             cur_len = torch.clip(length - i*chunk_len,0,chunk_len)
@@ -51,7 +50,6 @@ class PretrainedEncoderPLModule(LightningModule):
             if end > total_len:
                 end = total_len
             if (end>start+20): #and (length +chunk_len//2  > end):
-                print("chunk========",i)
                 mel_chunk=mel[:,:,:,start:end]
                 output_chunk = self.encoder.get_intermediate_layers(mel_chunk,cur_len,n=self.n_blocks,scene=True)
 
@@ -245,6 +243,9 @@ class FineTuningPLModule(LightningModule):
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y = y.argmax(-1)
         
+        elif self.mixup_training == True and (y.dim() == 0 or y.dim() == 1) :
+            y = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
+        
         x = self.head(x)
         loss = self.loss_fn(x,y)
         self.log("train_loss",loss,prog_bar=True,logger=True)
@@ -275,7 +276,7 @@ class FineTuningPLModule(LightningModule):
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
-        if self.mixup_training == True and y.dim() == 0 :
+        if self.mixup_training == True and (y.dim() == 0 or y.dim() == 1) :
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
         loss = self.loss_fn(x,y_)
@@ -294,7 +295,7 @@ class FineTuningPLModule(LightningModule):
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
-        if self.mixup_training == True and y.dim() == 0 :
+        if self.mixup_training == True and (y.dim() == 0 or y.dim()==1) :
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         x = self.head(x)
         loss = self.loss_fn(x,y_)

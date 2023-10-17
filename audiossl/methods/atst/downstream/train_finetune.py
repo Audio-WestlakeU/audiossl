@@ -130,7 +130,7 @@ def run(args, pretrained_module, fold=None):
         max_epochs=args.max_epochs,
         logger=logger_tb,  # ,logger_wb],
         replace_sampler_ddp=False if args.dataset_name == "audioset" else True,
-        check_val_every_n_epoch=1 if args.dataset_name == "audioset" else 10,
+        check_val_every_n_epoch=1,
         callbacks=[
             ckpt_cb,
             LearningRateMonitor(logging_interval="step"),
