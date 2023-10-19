@@ -39,14 +39,14 @@ class FrameATST(nn.Module):
         else:
             raise RuntimeError("arch {} is not implemented".format(arch))
         self.symmetric = symmetric
-        if avg_blocks==0: #frame-atst
+        if avg_blocks==0: #atst-frame
             self.student=MultiCropWrapper(encoder_fn(pos_type=pos_type,patch_embed=patch_embed,**kwargs),
                                         embed_dim,
                                         predictor=True)
             self.teacher=MultiCropWrapper(encoder_fn(pos_type=pos_type,patch_embed=patch_embed,**kwargs),
                                         embed_dim,
                                         predictor=False)
-        else: # data2vec
+        else: # data2vec, no projector, predictor is linear
             self.student=MultiCropWrapper(encoder_fn(pos_type=pos_type,patch_embed=patch_embed,**kwargs),
                                         embed_dim,
                                         projector="linear",
@@ -58,7 +58,7 @@ class FrameATST(nn.Module):
         for p in self.teacher.parameters():
             p.requires_grad = False
 
-        if avg_blocks==0: #frame-atst
+        if avg_blocks==0: #atst-frame
             self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "predictor" not in k })
         else: #data2vec
             self.teacher.load_state_dict({k:v for k,v in self.student.state_dict().items() if "projector" not in k })
@@ -70,12 +70,11 @@ class FrameATST(nn.Module):
             tea = self.teacher(x,length,mask,False)
             stu = self.student(x,length,mask,True)
             return self.loss_fn(stu,tea)
-            #total_loss_frm,total_loss_cls,std_frm_stu,std_frm_tea,std_cls_stu,std_cls_tea =
         else:
             tea = self.teacher(x[:1],length[:1],mask[:1],False)
             stu = self.student(x[1:],length[1:],mask[1:],True)
             return self.loss_fn(stu,tea)
-            #total_loss_frm,std_frm_stu,std_frm_tea
+
     def update_teacher(self,m):
         with torch.no_grad():
             for param_q, param_k in zip(self.student.encoder.parameters(), self.teacher.encoder.parameters()):
@@ -152,7 +151,7 @@ class FrameATSTLightningModule(LightningModule):
         parser = parent_parser.add_argument_group("FrameATSTModel")
         parser.add_argument("--arch",type=str,default="small")
         parser.add_argument("--symmetric",type=bool_flag,default=True,help="whether to use symemtric loss")
-        parser.add_argument("--nprompt",type=int,default=0,help="number of prompts")
+        parser.add_argument("--nprompt",type=int,default=0,help="number of prompts, not used, always 0")
         parser.add_argument("--learning_rate", default=0.0005, type=float, help="""Learning rate at the end of
             linear warmup (highest LR used during training). The learning rate is linearly scaled
             with the batch size, and specified here for a reference batch size of 256.""")
@@ -161,7 +160,7 @@ class FrameATSTLightningModule(LightningModule):
             """)
         parser.add_argument('--warmup_steps',default=1300,type=int)
         parser.add_argument('--max_steps',default=39010,type=int)
-        parser.add_argument('--pos_type',default="cut",type=str)
-        parser.add_argument('--avg_blocks',default=0,type=int)
-        parser.add_argument('--patch_embed',default="Linear",type=str)
+        parser.add_argument('--pos_type',default="cut",type=str,help="\"cut\" denotes absolute psitional embedding, \"interpolate\" denotes 2D positional embedding used in SSAST")
+        parser.add_argument('--avg_blocks',default=0,type=int,help="0 means atst-frame, a positive int value means data2vec style loss")
+        parser.add_argument('--patch_embed',default="Linear",type=str,help="Linear or CNN patch embedding")
         return parent_parser
