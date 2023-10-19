@@ -1,7 +1,7 @@
 from pytorch_lightning import LightningDataModule
 from torch.utils import data
 from audiossl.datasets import LMDBDataset
-from transform import ATSTTrainTransform
+from audiossl.methods.atst.transform import ATSTTrainTransform
 
 class ATSTDataModule(LightningDataModule):
     def __init__(self,
@@ -9,13 +9,14 @@ class ATSTDataModule(LightningDataModule):
                  batch_size_per_gpu=256,
                  num_workers=10,
                  subset=200000,
+                 train_len=6.0,
                  **kwargs,
                  ):
         super().__init__()
         self.dataset=LMDBDataset(data_path,
                                  split="train",
                                  subset=subset,
-                                 transform=ATSTTrainTransform())
+                                 transform=ATSTTrainTransform(anchor_len=(train_len,train_len)))
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
         self.save_hyperparameters()
@@ -37,4 +38,5 @@ class ATSTDataModule(LightningDataModule):
             help='Per-GPU batch-size : number of distinct samples loaded on one GPU.')
         parser.add_argument('--num_workers', default=10, type=int, help='Number of data loading workers per GPU.')
         parser.add_argument('--subset', default=200000, type=int, help='subset of training data')
+        parser.add_argument('--train_len', default=6.0, type=float, help='length of training segment')
         return parent_parser

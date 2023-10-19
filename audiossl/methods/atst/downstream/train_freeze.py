@@ -31,6 +31,9 @@ def get_pretraied_encoder(args):
         pretrained_model = ATSTLightningModule.load_from_checkpoint(
             args.pretrained_ckpt_path)
         pretrained_encoder = pretrained_model.model.teacher.encoder
+        pretrained_encoder.hyper_param = s['hyper_parameters']
+        if not ("train_len" in pretrained_encoder.hyper_param.keys()):
+            pretrained_encoder.hyper_param["train_len"] = 6.0
     else:
         from audiossl.methods.atst.downstream.utils import \
             load_pretrained_weights
@@ -43,6 +46,8 @@ def get_pretraied_encoder(args):
             pretrained_encoder = AST_base()
         load_pretrained_weights(
             pretrained_encoder, pretrained_weights=args.pretrained_ckpt_path, checkpoint_key="teacher")
+        pretrained_encoder.hyper_param = {}
+        pretrained_encoder.hyper_param["train_len"]=load_args.anchor_len[0]
     return pretrained_encoder
 
 
@@ -168,7 +173,7 @@ def main():
     """load pretrained encoder"""
     pretrained_encoder = get_pretraied_encoder(args)
     pretrained_module = PretrainedEncoderPLModule(pretrained_encoder,
-                                                        6.,
+                                                        pretrained_encoder.hyper_param["train_len"],
                                                         args.n_last_blocks)
     pretrained_module.freeze()
 
