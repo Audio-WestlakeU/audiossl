@@ -103,3 +103,17 @@ Click to download
     --aug_tea False \
     --aug_stu True
     ```
+
+## Train ATST-C2F
+
+This work proposes a method to combine ATST-Clip and ATST-Frame through distill knowleadge from fintuned ATST-Clip to ATST-Frame. First, finetune ATST-Clip on a downstream task; Second, fintune ATST-Frame on the same downstream task using a multi-task loss: ground truth loss + distilation loss.
+
+The code nees some cleaning up.  coming soon.
+- AS-2M
+    ```
+    python train_distill.py
+    ```
+- Other downstream tasks
+    ```
+    python train_distill_other.py
+    ```
