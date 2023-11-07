@@ -31,7 +31,7 @@ save_path=${arg_save_path}/$name
 ###################
 mkdir -p $save_path
 
- CUDA_VISIBLE_DEVICES=$devices  python train.py \
+echo  CUDA_VISIBLE_DEVICES=$devices  python train.py \
 		    --arch $arch \
                     --data_path $data_path  \
                     --save_path $save_path  \
@@ -51,5 +51,5 @@ mkdir -p $save_path
 		    --n_mels $n_mels \
 		    --anchor_len $anchor_len \
 		    --aug_tea $aug_tea \
-		    --aug_stu $aug_stu > $save_path/log.txt
+		    --aug_stu $aug_stu #> $save_path/log.txt
 
