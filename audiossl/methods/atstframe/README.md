@@ -7,7 +7,7 @@ for Both Clip-level and Frame-level Tasks"](https://arxiv.org/abs/2306.04186), w
 
 Click to download
 - ATST-Clip
-    - goto [../methods/atst](../methods/atst)
+    - goto [audiossl/methods/atst](audiossl/methods/atst)
 - ATST-Frame
 
     - [atstframe_samll](https://drive.google.com/file/d/1xZoOTuxV415icYONYbeFQzgrmJQf4a4B/view?usp=sharing)
