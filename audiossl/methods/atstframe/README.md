@@ -20,7 +20,7 @@ Click to download
 
 - Data prepare
 
-See [../atst/docs/data_prep.md](../atst/docs/data_prep.md)
+    See [../atst/docs/data_prep.md](../atst/docs/data_prep.md)
 
 - Linear evaluation
 
