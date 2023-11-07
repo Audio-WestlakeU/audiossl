@@ -284,6 +284,7 @@ class DistillLightningModule(LightningModule):
                                                      niter_per_epoch,
                                                      warmup_epochs)
         self.multi_label = multi_label                                             
+        self.num_labels = nclasses
         self.mixup_training =mixup_training
         if multi_label or self.mixup_training:
             self.loss_fn = binary_cross_entropy_with_logits
@@ -318,6 +319,8 @@ class DistillLightningModule(LightningModule):
         y_ = y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
+        elif self.mixup_training == True and (y.dim() == 0 or y.dim() == 1) :
+            y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         loss_c =  self.loss_fn(pred_sup,y_)
         loss = self.lambda_d*loss_d + (1-self.lambda_d)*loss_c
         self.log("train_loss",loss)
@@ -352,7 +355,7 @@ class DistillLightningModule(LightningModule):
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
-        if self.mixup_training == True and y.dim() == 0 :
+        elif self.mixup_training == True and (y.dim() == 0 or y.dim() == 1) :
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
 
         loss_c =  self.loss_fn(pred_sup,y_)
@@ -378,7 +381,7 @@ class DistillLightningModule(LightningModule):
         y_=y
         if self.multi_label == False and self.mixup_training == False and y.dim() > 1:
             y_ = y.argmax(-1)
-        if self.mixup_training == True and y.dim() == 0 :
+        if self.mixup_training == True and (y.dim() == 0 or y.dim()==1) :
             y_ = torch.nn.functional.one_hot(y.to(torch.int64),num_classes=self.num_labels)
         self._cal_metric(pred_sup,y_.argmax(-1) if self.mixup_training and (not self.multi_label) else y_)
 
