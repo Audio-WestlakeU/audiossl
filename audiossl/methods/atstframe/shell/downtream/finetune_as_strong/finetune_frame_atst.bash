@@ -15,5 +15,6 @@ do
     --batch_size_per_gpu ${bsz} \
     --prefix "_lr_${lr}_max_epohcs_${max_epochs}" \
     --lr_scale ${lr_scale} \
-    --max_epochs ${max_epochs}
+    --max_epochs ${max_epochs} # \
+    # \ --freeze_mode
 done

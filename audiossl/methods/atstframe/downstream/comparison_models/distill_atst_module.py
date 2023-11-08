@@ -15,8 +15,8 @@ class DistillATSTEncoder(pl.LightningModule):
         assert distill_mode in ["clip->frame", "frame->clip"], "wrong mode"
         print("Distill mode: ", distill_mode)
         if distill_mode == "clip->frame":
-            clip_path = "/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/clip_atst.ckpt"
-            frame_path = "/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/dcase_logs/as_strong_407/frameatst_lr_5e-1_max_epohcs_100_lr_scale_0.75_finetune/checkpoint-epoch=00028.ckpt"
+            clip_path = "./comparison_models/ckpts/clip_atst.ckpt"
+            frame_path = None # YOUR FINETUNED ATST-FRAME PATH (should locate in the ./logs/)
             self.teacher_module = DistillTeacherModule("frame")
             s = torch.load(frame_path, map_location="cpu")
             self.teacher_module.load_state_dict(s["state_dict"])
@@ -24,8 +24,8 @@ class DistillATSTEncoder(pl.LightningModule):
             load_pretrained_weights(self.clip_encoder, clip_path, checkpoint_key="teacher")
 
         elif distill_mode == "frame->clip":
-            clip_path = "/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/dcase_logs/as_strong_407/clipatst_lr_5e-1_max_epohcs_100_lr_scale_0.75_finetune/checkpoint-epoch=00099.ckpt"
-            frame_path = "/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/frame_atst.ckpt"
+            clip_path = None # YOUR FINETUNED CLIP-ATST PATH (should locate in the ./logs/)
+            frame_path = "./comparison_models/ckpts/frame_atst.ckpt"
             self.teacher_module = DistillTeacherModule("clip")
             s = torch.load(clip_path, map_location="cpu")
             self.teacher_module.load_state_dict(s["state_dict"])

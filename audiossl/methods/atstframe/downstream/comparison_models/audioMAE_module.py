@@ -18,9 +18,8 @@ audio_configs = {
 }
  
 class AudioMAEModel(pl.LightningModule):
-    def __init__(self):
+    def __init__(self, pretrained_path):
         super(AudioMAEModel, self).__init__()
-        pretrained_path = "./utils_dcase/comparison_models/ckpts/audioMAE_pretrained.pth"
         # Load pre-trained model
         self.encoder = vit_base_patch16()
         self.encoder.patch_embed = PatchEmbed_new(img_size=(1024, 128), patch_size=(16,16), in_chans=1, embed_dim=768, stride=16) # no overlap. stride=img_size=16
@@ -63,9 +62,9 @@ class AudioMAEModel(pl.LightningModule):
         return x
 
 class AudioMAEPredModule(pl.LightningModule):
-    def __init__(self) -> None:
+    def __init__(self, pretrained_path) -> None:
         super().__init__()
-        self.encoder = AudioMAEModel()
+        self.encoder = AudioMAEModel(pretrained_path)
         self.embed_dim = 768
         
     def forward(self, batch):
@@ -92,15 +91,6 @@ class AudioMAEPredModule(pl.LightningModule):
         return fbank, fbank.shape[1]
 
     def finetune_mode(self):
-        # self.freeze()
-        # # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.encoder.blocks):
-        #     if i == len(self.encoder.encoder.blocks) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
-        # # Unfreeze last norm layer
-        # for n, p in self.encoder.encoder.norm.named_parameters():
-        #     p.requires_grad = True
         for n, p in self.encoder.named_parameters():
             if ".head." in n:
                 p.requires_grad = False
@@ -108,18 +98,4 @@ class AudioMAEPredModule(pl.LightningModule):
                 p.requires_grad = True
 
     def finetune_mannual_train(self):
-        # for i, layer in enumerate(self.encoder.encoder.blocks):
-        #     if i == len(self.encoder.encoder.blocks) - 1:
-        #         layer.train()
-        # self.encoder.encoder.norm.train()
         self.train()
-
-if __name__ == "__main__":
-    fake_wav = torch.rand([160000])
-    module = AudioMAEModule()
-    fake_fb, _ = module.transform(fake_wav)
-    fake_batch = fake_fb.unsqueeze(0).expand(10, -1, -1)
-    fake_output, _ = module(((fake_batch, 0), 0))
-    
-    module.finetune_mode()
-    module.finetune_mannual_train()

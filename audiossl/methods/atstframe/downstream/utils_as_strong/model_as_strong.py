@@ -321,5 +321,5 @@ class FineTuningPLModule(LightningModule):
         tfm_params = list(reversed(tfm_params))
         tfm_groups = [{"params": tfm_params[i], "lr": self.learning_rate * (self.lr_scale ** i)} for i in range(len(tfm_params))]
         lower_lrs = [1e-6 * (self.lr_scale ** i) for i in range(len(tfm_params))]
-        print("layer-wise learning rate:", [ x["lr"] for x in tfm_groups])
+        print("layer-wise learning rate:", [ "{:.3f}".format(x["lr"]) for x in tfm_groups])
         return tfm_groups, lower_lrs

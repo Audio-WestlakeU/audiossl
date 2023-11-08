@@ -120,11 +120,10 @@ def run(args, pretrained_module):
 def main():
     parser = ArgumentParser("FineTuning")
     parser.add_argument('--arch', type=str,  default="ssast")
-    parser.add_argument("--pretrained_ckpt_path", type=str, default="./utils_dcase/comparison_models/ckpts/SSAST-Base-Frame-400.pth")
-    parser.add_argument("--save_path", type=str, default="./dcase_logs/as_strong/")
+    parser.add_argument("--pretrained_ckpt_path", type=str, default=".comparison_models/ckpts/SSAST-Base-Frame-400.pth")
+    parser.add_argument("--save_path", type=str, default="./logs/as_strong_407/")
     parser.add_argument('--nproc', type=str,  default="1,")
-    parser.add_argument("--dcase_conf", type=str, default="./conf/as_strong_dataset.yaml")
-    parser.add_argument("--unfreeze_last_n_blocks", type=int, default=0, help="Unfreeze last n blocks in finetuning.")
+    parser.add_argument("--dcase_conf", type=str, default="./conf/patch_40.yaml")
     parser.add_argument("--test_from_checkpoint", type=str, default=None)
     parser.add_argument("--freeze_mode", action="store_true")
     parser.add_argument("--prefix", type=str, default="/")
@@ -163,11 +162,11 @@ def main():
     elif args.arch == "patchmaeast":
         pretrained_module = PatchMAEASTPredModule(args.pretrained_ckpt_path)
     elif args.arch == "ast":
-        pretrained_module = PatchASTPredModule()
+        pretrained_module = PatchASTPredModule(args.pretrained_ckpt_path)
     elif args.arch == "audioMAE":
-        pretrained_module = AudioMAEPredModule()
+        pretrained_module = AudioMAEPredModule(args.pretrained_ckpt_path)
     elif args.arch == "mmd":
-        pretrained_module = MMDPredModule()
+        pretrained_module = MMDPredModule(args.pretrained_ckpt_path)
     elif args.arch == "distill":
         pretrained_module = DistillATSTPredModule(args.pretrained_ckpt_path)
     print("Freezing/Unfreezing encoder parameters?...", end="")

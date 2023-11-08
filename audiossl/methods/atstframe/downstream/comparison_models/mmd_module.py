@@ -39,9 +39,9 @@ class MMDModel(RuntimeM2D):
         return x if len(emb.shape) == 3 else [x_ for x_ in x]
     
 class MMDPredModule(pl.LightningModule):
-    def __init__(self) -> None:
+    def __init__(self, pretrained_path) -> None:
         super(MMDPredModule, self).__init__()
-        self.encoder = MMDModel(weight_file="/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/m2d_vit_base-80x608p16x16-221006-mr6/mmd_ckpt.pth")
+        self.encoder = MMDModel(weight_file=pretrained_path)
         self.embed_dim = 3840
         self.transform = DataTransform()
 
@@ -51,24 +51,14 @@ class MMDPredModule(pl.LightningModule):
         return x, y
 
     def finetune_mode(self):
-        for p in self.encoder.parameters():
-            p.requires_grad = True
-        # self.freeze()
-        # # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.backbone.blocks):
-        #     if i == len(self.encoder.backbone.blocks) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
-        # for n, p in self.encoder.backbone.norm.named_parameters():
-        #     p.requires_grad = True
+        for n, p in self.encoder.named_parameters():
+            if (".target" in n) or (".decoder" in n) or ("mask_token" in n):
+                p.requires_grad = False
+            else:
+                p.requires_grad = True
 
     def finetune_mannual_train(self):
         self.train()
-        # for i, layer in enumerate(self.encoder.backbone.blocks):
-        #     if i == len(self.encoder.backbone.blocks) - 1:
-        #         layer.train()
-        # self.encoder.backbone.norm.train()
-
 
     def cal_state(self, filename_1, filename_2):
         means, stds = [], []

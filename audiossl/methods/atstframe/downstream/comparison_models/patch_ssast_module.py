@@ -76,34 +76,20 @@ class PatchSSASTPredModule(pl.LightningModule):
         return fbank, fbank.shape[0]
 
     def finetune_mode(self):
-        # self.freeze()
-        # # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.v.blocks):
-        #     if i == len(self.encoder.v.blocks) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
-        # # Unfreeze last norm layer
-        # for n, p in self.encoder.v.norm.named_parameters():
-        #     p.requires_grad = True
         for n, p in self.named_parameters():
             if (".v.head" in n) or (".mlp_head." in n):
-                print("Freeze:", n)
                 p.requires_grad = False
             else:
                 p.requires_grad = True
 
     def finetune_mannual_train(self):
-        # for i, layer in enumerate(self.encoder.v.blocks):
-        #     if i == len(self.encoder.v.blocks) - 1:
-        #         layer.train()
-        # self.encoder.v.norm.train()
         self.train()
+
 
 def calculate_stat(path_1, path_2):
     from glob import glob
     from audiossl.datasets.dcase_utils.datasets import read_audio
     from tqdm import tqdm
-
 
     running_stats = []
     filenames = glob(path_1 + "*.wav") + glob(path_2 + "*.wav")

@@ -58,7 +58,6 @@ class ASTModel(nn.Module):
                  pretrain_stage=True, load_pretrained_mdl_path=None):
 
         super(ASTModel, self).__init__()
-        assert timm.__version__ == '0.4.5', 'Please use timm == 0.4.5, the code might not be compatible with newer versions.'
         # override timm input shape restriction
         timm.models.vision_transformer.PatchEmbed = PatchEmbed
 
