@@ -3,7 +3,7 @@ import torchaudio
 
 import pytorch_lightning as pl
 import torch.nn as nn
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.mae_ast import MAE_AST
+from audiossl.methods.atstframe.downstream.comparison_models.models.mae_ast import MAE_AST
 
 audio_configs = {
     "feature_type": "fbank", 

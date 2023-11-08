@@ -9,7 +9,7 @@ ckpt='/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream
 for lr in "5e-1"
 do
     echo ${arch}, learning rate: ${lr}, lr_scale: ${lr_scale}
-    python3 pretrain_feat_as_strong.py --nproc ${gpu_id}, --learning_rate ${lr} --arch ${arch} \
+    python3 train_as_strong.py --nproc ${gpu_id}, --learning_rate ${lr} --arch ${arch} \
     --pretrained_ckpt_path ${mode} \
     --dcase_conf "./conf/frame_atst_as_strong.yaml" \
     --dataset_name "as_strong" \

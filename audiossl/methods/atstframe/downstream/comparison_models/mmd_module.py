@@ -3,13 +3,12 @@ import torch
 import nnAudio.features
 
 import pytorch_lightning as pl
-import torch.nn as nn
 
 from tqdm import tqdm
 from glob import glob
 from einops import rearrange
 from audiossl.datasets.dcase_utils.datasets import read_audio
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.mmd_model import Config, RuntimeM2D
+from audiossl.methods.atstframe.downstream.comparison_models.models.mmd_model import Config, RuntimeM2D
 
 class MMDModel(RuntimeM2D):
     def __init__(self, weight_file):

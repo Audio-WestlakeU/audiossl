@@ -1,11 +1,8 @@
-import sys
-
 import torch
-import torchaudio
 import torchaudio.compliance.kaldi as ta_kaldi
 import pytorch_lightning as pl
 import torch.nn as nn
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.beats.BEATs import BEATs, BEATsConfig
+from audiossl.methods.atstframe.downstream.comparison_models.models.beats.BEATs import BEATs, BEATsConfig
 
 audio_configs = {
     "feature_type": "fbank", 

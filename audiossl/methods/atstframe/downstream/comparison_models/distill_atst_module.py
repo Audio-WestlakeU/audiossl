@@ -1,10 +1,10 @@
 import torch
 import pytorch_lightning as pl
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.frame_atst import FrameATSTLightningModule
+from audiossl.methods.atstframe.downstream.comparison_models.models.frame_atst import FrameATSTLightningModule
 from audiossl.models.atst.audio_transformer import AST_base
-from audiossl.methods.atst.downstream.utils import load_pretrained_weights
-from audiossl.methods.atst.downstream.transform import FreezingTransform
-from audiossl.methods.atst.downstream.utils_dcase.model_distill_utils import DistillTeacherModule
+from audiossl.methods.atstframe.downstream.utils import load_pretrained_weights
+from audiossl.methods.atstframe.downstream.transform import FreezingTransform
+from audiossl.methods.atstframe.downstream.utils_as_strong.model_distill_utils import DistillTeacherModule
 
 class DistillATSTEncoder(pl.LightningModule):
     def __init__(self, distill_mode):

@@ -12,24 +12,23 @@ from torch import nn
 from pytorch_lightning import LightningModule
 
 from torch.nn import functional as F
-from audiossl.datasets.dcase_utils.as_strong_dict import get_lab_dict
+from audiossl.datasets.as_strong_utils.as_strong_dict import get_lab_dict
 from audiossl.datasets.dcase_utils import ManyHotEncoder
 from audiossl.utils.common import cosine_scheduler_epoch
-from .evaluation_measures import (
+from audiossl.methods.atstframe.downstream.utils_psds_eval import evaluation, psds
+from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
     decode_preds,
     MedianPool2d,
     SEDMetrics,
+    gpu_decode_preds
 )
-from .evaluation import (
+from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
     compute_per_intersection_macro_f1,
     compute_psds_from_operating_points
 )
-from .gpu_utils import gpu_decode_preds
 '''
 This file is modified from model.py
 '''
-
-
 def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Calls BCE with logits and cast the target one_hot (y) encoding to floating point precision."""
     return F.binary_cross_entropy_with_logits(x, y.float())
@@ -50,11 +49,11 @@ class LinearHead(nn.Module):
 
     def forward(self, x, temp=1):
         # flatten
-        # x = x.transpose(1, 2)
-        # if self.use_norm:
-        #     x = x.unsqueeze(-1)
-        #     x = self.norm(x)
-        # x = x.squeeze(-1).transpose(1, 2)
+        x = x.transpose(1, 2)
+        if self.use_norm:
+            x = x.unsqueeze(-1)
+            x = self.norm(x)
+        x = x.squeeze(-1).transpose(1, 2)
         # linear layer + get strong predictions
         strong = self.sigmoid(self.linear(x) / temp)
         return strong.transpose(1, 2)
@@ -69,9 +68,7 @@ class DistillPLModule(LightningModule):
                  warmup_epochs,
                  num_labels,
                  dcase_conf="./conf/frame_atst_as_strong.yaml",
-                 n_last_blocks=1,
                  multi_label=False,
-                 mixup_training=False,
                  metric_save_dir=None,
                  freeze_mode=False,
                  distill_mode="clip->frame"):
@@ -133,19 +130,14 @@ class DistillPLModule(LightningModule):
                 strong_pred_tea = self.encoder.encoder.teacher_module((data, labels))
             strong_pred_std= self.head(x)
         
-        loss_d_strong = self.loss_fn(strong_pred_std, strong_pred_tea.detach())
-        loss_d = loss_d_strong
         # Distillation loss
-
+        loss_d_strong = self.loss_fn(strong_pred_std, strong_pred_tea.detach())
         strong_loss = self.loss_fn(strong_pred_std, labels)
-
-        tot_loss = strong_loss
-
-        tot_loss = tot_loss / 2 + loss_d / 2
+        tot_loss = strong_loss / 2 + loss_d_strong / 2
         
         self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True, logger=True)
         self.log("train/synth/strong_loss", strong_loss)
-        self.log("train/distill_loss", loss_d)
+        self.log("train/distill_loss", loss_d_strong)
 
         return tot_loss
 
@@ -189,12 +181,8 @@ class DistillPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)
-        # print(x[0])
-        # print(strong_pred[0])
-        # print(strong_pred.shape)
         # Get weak label for real data
         test_loss = self.loss_fn(strong_pred, labels)
-        
         self.log("test/real/strong_loss", test_loss, prog_bar=True, logger=True)
         # Compute PSDS (Different from F1 metric, PSDS computes the ROC, which requires various thresholds from 0 to 1.)   
         decoded_strong = gpu_decode_preds(
@@ -209,17 +197,11 @@ class DistillPLModule(LightningModule):
         # Compute F1 metric
         mid_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 2]
         self.decoded_05_buffer = self.decoded_05_buffer.append(decoded_strong[mid_val])
-        # self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True, logger=True)
         return
 
     def on_test_epoch_end(self) -> None:
         save_dir = os.path.join(self.metric_save_dir, "metrics_test")
         # # calculate the metrics
-        import time
-        torch.cuda.synchronize()
-        st = time.time()
-
-        from . import evaluation,psds
         evaluation.g_parallel=True
         psds.g_parallel=True
         
@@ -234,13 +216,7 @@ class DistillPLModule(LightningModule):
             save_dir=os.path.join(save_dir, "scenario1"),
             weighted=False,
         )
-        torch.cuda.synchronize()
-        ed = time.time()
-        print("PSDS 1 time:", ed - st)
-        print("PSDS 1:", psds_score_scenario1)
 
-        torch.cuda.synchronize()
-        st = time.time()
         psds_score_scenario2 = compute_psds_from_operating_points(
             self.test_psds_buffer,
             self.config["data"]["test_tsv"],
@@ -253,11 +229,6 @@ class DistillPLModule(LightningModule):
             save_dir=os.path.join(save_dir, "scenario2"),
             weighted=False,
         )
-        torch.cuda.synchronize()
-        ed = time.time()
-        print("PSDS 2 time:", ed - st)
-        print("PSDS 2:", psds_score_scenario2)
-
         #==================================
 
         intersection_f1_macro = compute_per_intersection_macro_f1(
@@ -293,7 +264,6 @@ class DistillPLModule(LightningModule):
             )
             self.mylr_scheduler = cosine_scheduler_epoch(self.learning_rate, 1e-6, self.max_epochs, self.niter_per_epoch, self.warmup_epochs)
         else:
-            print("Using scale 0.75")
             param_groups, lower_lrs = self.request_param_groups()
             # # Linear layer
             param_groups.append({"params": self.head.parameters(), "lr": self.learning_rate})

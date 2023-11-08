@@ -1,3 +1,4 @@
+import os
 import yaml
 import pandas as pd
 import torch
@@ -23,6 +24,7 @@ class TransformDataset(torch.utils.data.dataset.Dataset):
         return audio, labs, filename
 
 def ASStrongDataset(as_strong_conf, split, transform=None, target_transform=None):
+    assert os.path.exists(as_strong_conf), f"{as_strong_conf} not exist!"
     with open(as_strong_conf, "r") as f:
         config = yaml.safe_load(f)
     assert target_transform is None, "No label transformation on DCASE data is supported. Mixup is used in training step directly."

@@ -8,7 +8,7 @@ lr="1e-1"
 test_ckpt=/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/dcase_logs/as_strong_407/patchmaeast_lr_5e-1_max_epohcs_100_finetune/checkpoint-epoch=00055.ckpt
 echo test: ${arch}, learning rate: ${lr}, lr_scale: ${lr_scale}
 
-python3 pretrain_feat_as_strong.py --nproc ${gpu_id} --learning_rate ${lr} --arch ${arch} \
+python3 train_as_strong.py --nproc ${gpu_id} --learning_rate ${lr} --arch ${arch} \
     --pretrained_ckpt_path "./utils_dcase/comparison_models/ckpts/chunk_patch_75_12LayerEncoder.pt" \
     --dcase_conf "./conf/beats_as_strong.yaml" \
     --dataset_name "as_strong" \

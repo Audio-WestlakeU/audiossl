@@ -5,7 +5,7 @@ from easydict import EasyDict
 from pathlib import Path
 import pytorch_lightning as pl
 import torch.nn as nn
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.byola import AudioNTT2022Encoder, load_pretrained_weights
+from audiossl.methods.atstframe.downstream.comparison_models.models.byola import AudioNTT2022Encoder, load_pretrained_weights
 from nnAudio.features import MelSpectrogram
 
     

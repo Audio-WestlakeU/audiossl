@@ -13,7 +13,7 @@ import torch.nn as nn
 from torch.nn import LayerNorm
 import torchaudio.compliance.kaldi as ta_kaldi
 
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.beats.backbone import (
+from audiossl.methods.atstframe.downstream.comparison_models.models.beats.backbone import (
     TransformerEncoder,
 )
 

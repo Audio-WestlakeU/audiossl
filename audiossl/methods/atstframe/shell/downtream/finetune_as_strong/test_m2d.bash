@@ -8,7 +8,7 @@ test_ckpt=/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downst
 for lr in "1e-1"
 do
     echo ${arch}, learning rate: ${lr}
-    python3 pretrain_feat_as_strong.py --nproc ${gpu_id} --learning_rate ${lr} --arch ${arch}  \
+    python3 train_as_strong.py --nproc ${gpu_id} --learning_rate ${lr} --arch ${arch}  \
     --dcase_conf "./conf/beats_as_strong.yaml" \
     --dataset_name "as_strong" \
     --batch_size_per_gpu ${bsz} \

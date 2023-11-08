@@ -7,7 +7,7 @@ bsz=64
 for lr in "5e-1"
 do
     echo ${arch}, learning rate: ${lr}
-    python3 pretrain_feat_as_strong.py --nproc ${gpu_id} --learning_rate ${lr} --arch ${arch}  \
+    python3 train_as_strong.py --nproc ${gpu_id} --learning_rate ${lr} --arch ${arch}  \
     --pretrained_ckpt_path ./utils_dcase/comparison_models/ckpts/BEATs_iter3.pt \
     --dcase_conf "./conf/beats_as_strong.yaml" \
     --dataset_name "as_strong" \

@@ -6,8 +6,7 @@ import torch
 import torch.nn.functional
 import torch.nn as nn
 import pytorch_lightning as pl
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.audioMAE_model import vit_base_patch16, PatchEmbed_new
-import math
+from audiossl.methods.atstframe.downstream.comparison_models.models.audioMAE_model import vit_base_patch16, PatchEmbed_new
 
 # This file contains the utilities of SSAST freezing test, including:
 # Data prepocessing (wav2fbank, normalization)

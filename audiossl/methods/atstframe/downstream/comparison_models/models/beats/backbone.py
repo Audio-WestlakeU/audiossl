@@ -14,7 +14,7 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 from torch.nn import LayerNorm, Parameter
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.beats.modules import (
+from audiossl.methods.atstframe.downstream.comparison_models.models.beats.modules import (
     GradMultiply,
     SamePad,
     get_activation_fn,

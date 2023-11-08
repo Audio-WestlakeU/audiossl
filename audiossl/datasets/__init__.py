@@ -10,6 +10,7 @@ from .voxceleb1 import SpeakerClassifiDataset
 from .librispeech import LibriSpeechDataset
 from .iemocap import IEMOCAPDataset
 from .dcase import DCASEDataset
+from .as_strong import ASStrongDataset
 
 
 @register_dataset("voxceleb1",multi_label=False,num_labels=1251,num_folds=1)
@@ -60,6 +61,10 @@ def create_dcase(config_path, split, transform=None, target_transform=None, unsu
     assert split in ["train", "valid", "test"], "Dataset type: {} is not supported.".format(split)
     return DCASEDataset(config_path, split, transform=transform, target_transform=None, unsup=unsup)
 
+@register_dataset("as_strong", multi_label=True, num_labels=407, num_folds=1)
+def create_dcase(as_strong_conf, split, transform=None, target_transform=None):
+    assert split in ["train", "valid", "test"], "Dataset type: {} is not supported.".format(split)
+    return ASStrongDataset(as_strong_conf, split, transform=transform, target_transform=None)
 
 __all__ = ['LMDBDataset',
            'Nsynth',

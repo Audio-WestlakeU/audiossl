@@ -1,19 +1,17 @@
 """Masked Modeling Duo (M2D) Runtime class/functions.
 """
-
 import sys
 sys.path.append('..')  # workaround for using heareval with `pip install -e .`
 
-import logging
-from pathlib import Path
-
 import torch
-import torch.nn as nn
-from einops import rearrange
+import logging
 import nnAudio.features
-import re
 
-from .models import models_mae
+import torch.nn as nn
+
+from einops import rearrange
+from pathlib import Path
+from . import models_mae
 
 
 class Config:

@@ -1,6 +1,6 @@
-from audiossl.methods.atstframe.downstream.utils_dcase.model_as_strong import FineTuningPLModule
-from audiossl.methods.atstframe.downstream.utils_dcase.comparison_models.atst_module import ATSTPredModule
-from audiossl.methods.atstframe.downstream.utils_dcase.comparison_models.frame_atst_module import FrameATSTPredModule
+from audiossl.methods.atstframe.downstream.utils_as_strong.model_as_strong import FineTuningPLModule
+from audiossl.methods.atstframe.downstream.comparison_models.clip_atst_module import ATSTPredModule
+from audiossl.methods.atstframe.downstream.comparison_models.frame_atst_module import FrameATSTPredModule
 
 class DistillTeacherModule(FineTuningPLModule):
     def __init__(self,

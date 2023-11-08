@@ -1,5 +1,4 @@
 from collections import OrderedDict
-
 def get_lab_dict(path=None):
     if path is None:
         path = "/home/shaonian/Datasets/AudioSet_strong/meta/common_labels.txt"

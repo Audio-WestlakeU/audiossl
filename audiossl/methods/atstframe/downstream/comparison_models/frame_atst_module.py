@@ -1,8 +1,8 @@
 import torch
 import pytorch_lightning as pl
-from audiossl.methods.atst.downstream.utils_dcase.comparison_models.frame_atst import FrameAST_base, FrameATSTLightningModule
-from audiossl.methods.atst.downstream.utils import load_pretrained_weights
-from audiossl.methods.atst.downstream.transform import FreezingTransform
+from audiossl.methods.atstframe.downstream.comparison_models.models.frame_atst import FrameAST_base, FrameATSTLightningModule
+from audiossl.methods.atstframe.downstream.utils import load_pretrained_weights
+from audiossl.methods.atstframe.downstream.transform import FreezingTransform
 
 class FrameATSTPredModule(pl.LightningModule):
     """This module has been modified for frame-level prediction"""
