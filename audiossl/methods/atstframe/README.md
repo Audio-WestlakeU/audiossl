@@ -106,7 +106,7 @@ Click to download
 
 ## Train ATST-C2F
 
-This work proposes a method to combine ATST-Clip and ATST-Frame through distilling knowleadge from fintuned ATST-Clip to ATST-Frame. First, finetune ATST-Clip on a downstream task; Second, fintune ATST-Frame on the same downstream task using a multi-task loss: ground truth loss + distilation loss.
+Besides ATST-Clip and ATST-Frame, this work also proposes a method to combine ATST-Clip and ATST-Frame through distilling knowleadge from fintuned ATST-Clip to ATST-Frame. First, finetune ATST-Clip on a downstream task; Second, fintune ATST-Frame on the same downstream task using a multi-task loss: ground truth loss + distilation loss.
 
 The code nees some cleaning up.  coming soon.
 - AS-2M
