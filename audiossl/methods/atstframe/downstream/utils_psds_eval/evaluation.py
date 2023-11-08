@@ -1,63 +1,21 @@
 import os
-from audiossl.datasets.dcase_utils.encoder import ManyHotEncoder
-import scipy
+import threading
+import multiprocessing
+import sed_eval
+import psds_eval
 
 import numpy as np
 import pandas as pd
-import psds_eval
-import sed_eval
+from .psds import PSDSEval, plot_psd_roc
 
-from collections import OrderedDict
-from pathlib import Path
-from psds_eval import PSDSEval, plot_psd_roc
+from concurrent.futures import ProcessPoolExecutor
+from queue import Queue
 
-# Gloable variables following official codes
-classes_labels = OrderedDict(
-    {
-        "Alarm_bell_ringing": 0,
-        "Blender": 1,
-        "Cat": 2,
-        "Dishes": 3,
-        "Dog": 4,
-        "Electric_shaver_toothbrush": 5,
-        "Frying": 6,
-        "Running_water": 7,
-        "Speech": 8,
-        "Vacuum_cleaner": 9,
-    }
-)
 
-def log_sedeval_metrics(predictions, ground_truth, save_dir=None):
-    """ Return the set of metrics from sed_eval
-    Args:
-        predictions: pd.DataFrame, the dataframe of predictions.
-        ground_truth: pd.DataFrame, the dataframe of groundtruth.
-        save_dir: str, path to the folder where to save the event and segment based metrics outputs.
+g_manager = multiprocessing.Manager()
 
-    Returns:
-        tuple, event-based macro-F1 and micro-F1, segment-based macro-F1 and micro-F1
-    """
-    if predictions.empty:
-        return 0.0, 0.0, 0.0, 0.0
 
-    gt = pd.read_csv(ground_truth, sep="\t")
-
-    event_res, segment_res = compute_sed_eval_metrics(predictions, gt)
-
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-        with open(os.path.join(save_dir, "event_f1.txt"), "w") as f:
-            f.write(str(event_res))
-
-        with open(os.path.join(save_dir, "segment_f1.txt"), "w") as f:
-            f.write(str(segment_res))
-
-    return (
-        event_res.results()["class_wise_average"]["f_measure"]["f_measure"],
-        event_res.results()["overall"]["f_measure"]["f_measure"],
-        segment_res.results()["class_wise_average"]["f_measure"]["f_measure"],
-        segment_res.results()["overall"]["f_measure"]["f_measure"],
-    )  # return also segment measures
+g_parallel = False
 
 def get_event_list_current_file(df, fname):
     """
@@ -78,7 +36,6 @@ def get_event_list_current_file(df, fname):
         event_list_for_current_file = event_file.to_dict("records")
 
     return event_list_for_current_file
-
 
 def psds_results(psds_obj):
     """ Compute psds scores
@@ -127,7 +84,7 @@ def event_based_evaluation_df(
         percentage_of_length=percentage_of_length,
         empty_system_output_handling="zero_score",
     )
-
+    
     for fname in evaluated_files:
         reference_event_list_for_current_file = get_event_list_current_file(
             reference, fname
@@ -135,11 +92,11 @@ def event_based_evaluation_df(
         estimated_event_list_for_current_file = get_event_list_current_file(
             estimated, fname
         )
-
         event_based_metric.evaluate(
             reference_event_list=reference_event_list_for_current_file,
             estimated_event_list=estimated_event_list_for_current_file,
         )
+
 
     return event_based_metric
 
@@ -208,6 +165,7 @@ def compute_per_intersection_macro_f1(
     dtc_threshold=0.5,
     gtc_threshold=0.5,
     cttc_threshold=0.3,
+    label_interest=None,
 ):
     """ Compute F1-score per intersection, using the defautl
     Args:
@@ -225,7 +183,11 @@ def compute_per_intersection_macro_f1(
     """
     gt = pd.read_csv(ground_truth_file, sep="\t")
     durations = pd.read_csv(durations_file, sep="\t")
-
+    if label_interest is not None:
+        gt_mask = [x in label_interest for x in gt["event_label"]]
+        gt = gt[gt_mask]
+        filenames = gt["filename"].values
+        durations = durations[[x in filenames for x in durations["filename"]]]
     psds = PSDSEval(
         ground_truth=gt,
         metadata=durations,
@@ -236,7 +198,7 @@ def compute_per_intersection_macro_f1(
     psds_macro_f1 = []
     for threshold in prediction_dfs.keys():
         if not prediction_dfs[threshold].empty:
-            threshold_f1, _ = psds.compute_macro_f_score(prediction_dfs[threshold])
+            threshold_f1, f_dict = psds.compute_macro_f_score(prediction_dfs[threshold])
         else:
             threshold_f1 = 0
         if np.isnan(threshold_f1):
@@ -245,6 +207,16 @@ def compute_per_intersection_macro_f1(
     psds_macro_f1 = np.mean(psds_macro_f1)
     return psds_macro_f1
 
+
+def compute_psds_one_item(psds_eval: PSDSEval,prediction_dfs,i,k, weighted=False):
+    det = prediction_dfs[k]
+    # see issue https://github.com/audioanalytic/psds_eval/issues/3
+    det["index"] = range(1, len(det) + 1)
+    det = det.set_index("index")
+    psds_args = psds_eval.add_operating_point_single_thread(
+        det, info={"name": f"Op {i + 1:02d}", "threshold": k}, weighted=weighted
+    )
+    return psds_args
 
 def compute_psds_from_operating_points(
     prediction_dfs,
@@ -257,10 +229,19 @@ def compute_psds_from_operating_points(
     alpha_st=0,
     max_efpr=100,
     save_dir=None,
+    label_interest=None,
+    weighted=False
 ):
-
+    print("Computing PSDS score ... (May take > 10 mins)")
     gt = pd.read_csv(ground_truth_file, sep="\t")
     durations = pd.read_csv(durations_file, sep="\t")
+
+    if label_interest is not None:
+        gt_mask = [x in label_interest for x in gt["event_label"]]
+        gt = gt[gt_mask]
+        filenames = gt["filename"].values
+        durations = durations[[x in filenames for x in durations["filename"]]]
+    
     psds_eval = PSDSEval(
         ground_truth=gt,
         metadata=durations,
@@ -268,17 +249,41 @@ def compute_psds_from_operating_points(
         gtc_threshold=gtc_threshold,
         cttc_threshold=cttc_threshold,
     )
+    if g_parallel:
+        # Parallel version (written by us)
+        prediction_dfs=g_manager.dict(prediction_dfs)
+        q = Queue(100)
+        def helper_thread_fun():
+            with ProcessPoolExecutor(max_workers=10) as exe:
+                for i, k in enumerate(prediction_dfs.keys()):
+                    q.put(exe.submit(compute_psds_one_item,psds_eval,prediction_dfs,i,k, weighted=weighted))
+                q.put(None)
 
-    for i, k in enumerate(prediction_dfs.keys()):
-        det = prediction_dfs[k]
-        # see issue https://github.com/audioanalytic/psds_eval/issues/3
-        det["index"] = range(1, len(det) + 1)
-        det = det.set_index("index")
-        psds_eval.add_operating_point(
-            det, info={"name": f"Op {i + 1:02d}", "threshold": k}
-        )
+        helper_thread = threading.Thread(target=helper_thread_fun)
+        helper_thread.setDaemon(True)
+        helper_thread.start()
 
-    psds_score = psds_eval.psds(alpha_ct=alpha_ct, alpha_st=alpha_st, max_efpr=max_efpr)
+        for future in iter(q.get,""):
+            if future is None:
+                break
+            else:
+                psds_args=future.result()
+                if psds_args is not None:
+                    psds_eval._add_op(**psds_args)
+    else:
+        # Default behavior
+        for i, k in enumerate(prediction_dfs.keys()):
+            det = prediction_dfs[k]
+            # see issue https://github.com/audioanalytic/psds_eval/issues/3
+            det["index"] = range(1, len(det) + 1)
+            det = det.set_index("index")
+            psds_args = psds_eval.add_operating_point_single_thread(
+                det, info={"name": f"Op {i + 1:02d}", "threshold": k}, weighted=weighted
+            )
+            if psds_args is not None:
+                psds_eval._add_op(**psds_args)
+    psds_score = psds_eval.psds(alpha_ct=alpha_ct, alpha_st=alpha_st, max_efpr=max_efpr, weighted=weighted)
+
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
@@ -299,57 +304,4 @@ def compute_psds_from_operating_points(
             psds_score,
             filename=os.path.join(save_dir, f"PSDS_ct{alpha_ct}_st{alpha_st}_100.png"),
         )
-
     return psds_score.value
-
-
-def pull_back_preds(preds, exp_len):
-    exp_len = exp_len * 25
-    cur_len = preds.shape[-1]
-    # print("Expected length:", exp_len)
-    # print("Prediction shape:", preds.shape)
-    pull_preds = np.zeros((10, int(exp_len)))  # bsz, nclass, timestamps
-    # print(preds.shape)
-    # print(pull_preds.shape)
-    for i, pred in enumerate(preds):
-        temp = np.pad(pred, ((0, 0), (int(i * 200), int(exp_len - 200 * i - cur_len))))
-        pull_preds += temp
-    return pull_preds > 0
-
-def batched_decode_preds(
-    strong_preds, filenames, encoder, thresholds=[0.5], median_filter=7, pad_indx=None,
-):
-    """ Decode a batch of predictions to dataframes. Each threshold gives a different dataframe and stored in a
-    dictionary
-
-    Args:
-        strong_preds: torch.Tensor, batch of strong predictions.
-        filenames: list, the list of filenames of the current batch.
-        encoder: ManyHotEncoder object, object used to decode predictions.
-        thresholds: list, the list of thresholds to be used for predictions.
-        median_filter: int, the number of frames for which to apply median window (smoothing).
-        pad_indx: list, the list of indexes which have been used for padding.
-
-    Returns:
-        dict of predictions, each keys is a threshold and the value is the DataFrame of predictions.
-    """
-    # Init a dataframe per threshold
-    prediction_dfs = {}
-    for threshold in thresholds:
-        prediction_dfs[threshold] = pd.DataFrame()
-
-    for j in range(strong_preds.shape[0]):  # over batches
-        for c_th in thresholds:
-            c_preds = strong_preds[j]
-            if pad_indx is not None:
-                true_len = int(c_preds.shape[-1] * pad_indx[j].item())
-                c_preds = c_preds[:true_len]
-            pred = c_preds.transpose(0, 1).detach().cpu().numpy()
-            pred = pred > c_th
-            pred = scipy.ndimage.filters.median_filter(pred, (median_filter, 1))
-            pred = encoder.decode_strong(pred)
-            pred = pd.DataFrame(pred, columns=["event_label", "onset", "offset"])
-            pred["filename"] = Path(filenames[j]).stem + ".wav"
-            prediction_dfs[c_th] = pd.concat([prediction_dfs[c_th], pred], ignore_index=True)
-
-    return prediction_dfs

@@ -1,0 +1,149 @@
+import csv
+import json
+import torchaudio
+import numpy as np
+import torch
+import torch.nn.functional
+import torch.nn as nn
+import pytorch_lightning as pl
+from audiossl.methods.atst.downstream.utils_dcase.comparison_models.ssast import ASTModel
+import math
+
+# This file contains the utilities of SSAST freezing test, including:
+# Data prepocessing (wav2fbank, normalization)
+audio_configs = {
+    "n_mels": 128,
+    "sr": 16000,
+    "norm_mean": -6.030435443767988,
+    "norm_std": 4.102992546322562,
+}
+ 
+class SSASTModel(ASTModel):
+    def __init__(self, label_dim=527, fshape=128, tshape=2, fstride=128, tstride=2, input_fdim=128, input_tdim=1024, model_size='base', pretrain_stage=True, load_pretrained_mdl_path=None):
+        super(SSASTModel, self).__init__(label_dim, fshape, tshape, fstride, tstride, input_fdim, input_tdim, model_size, pretrain_stage, load_pretrained_mdl_path)
+        self.feat_mean = nn.AvgPool2d((2, 1), padding=(1, 0))
+
+    def forward(self, x):
+        x = x.unsqueeze(1)
+        x = x.transpose(2, 3)
+        # Rewrite ASTModel forward
+        B = x.shape[0]
+        x = self.v.patch_embed(x)
+        if self.cls_token_num == 2:
+            cls_tokens = self.v.cls_token.expand(B, -1, -1)
+            dist_token = self.v.dist_token.expand(B, -1, -1)
+            x = torch.cat((cls_tokens, dist_token, x), dim=1)
+        else:
+            cls_tokens = self.v.cls_token.expand(B, -1, -1)
+            x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.v.pos_embed
+        x = self.v.pos_drop(x)
+        for blk_id, blk in enumerate(self.v.blocks):
+            x = blk(x)
+        x = self.v.norm(x)
+        # average output of all tokens except cls token(s)
+        x = x[:, self.cls_token_num:, :]
+        # x = torch.concat([x, x[:, -1, :].unsqueeze(1)], dim=1)
+        x = self.feat_mean(x)
+        return x
+
+class SSASTPredModule(pl.LightningModule):
+    def __init__(self, pretrained_ckpt_path) -> None:
+        super().__init__()
+        self.encoder = SSASTModel(label_dim=1, fshape=128, tshape=2, fstride=128, tstride=2, 
+                                 input_fdim=128, input_tdim=998, model_size="base", pretrain_stage=False,
+                                 load_pretrained_mdl_path=pretrained_ckpt_path)
+        self.embed_dim = 768
+        
+    def forward(self, batch):
+        (x, length), y = batch
+        x = self.encoder(x)
+        return x, y
+
+    @staticmethod
+    def transform(wav):
+        wav = (wav - wav.mean()).unsqueeze(0)   # add fake channel
+        # LogFBank
+        fbank = torchaudio.compliance.kaldi.fbank(
+            wav, 
+            htk_compat=True, 
+            sample_frequency=audio_configs["sr"], 
+            use_energy=False, 
+            window_type='hanning', 
+            num_mel_bins=audio_configs["n_mels"], 
+            dither=0.0, 
+            frame_shift=10
+            )
+        fbank = (fbank - audio_configs['norm_mean']) / (audio_configs['norm_std'] * 2)
+
+        return fbank, fbank.shape[0]
+
+    def finetune_mode(self):
+        # self.freeze()
+        # # Unfreeze last tfm block
+        # for i, layer in enumerate(self.encoder.v.blocks):
+        #     if i == len(self.encoder.v.blocks) - 1:
+        #         for n, p in layer.named_parameters():
+        #             p.requires_grad = True
+        # # Unfreeze last norm layer
+        # for n, p in self.encoder.v.norm.named_parameters():
+        #     p.requires_grad = True
+        for n, p in self.named_parameters():
+            print(n)
+            p.requires_grad = True
+
+    def finetune_mannual_train(self):
+        # for i, layer in enumerate(self.encoder.v.blocks):
+        #     if i == len(self.encoder.v.blocks) - 1:
+        #         layer.train()
+        # self.encoder.v.norm.train()
+        self.train()
+
+def calculate_stat(path_1, path_2):
+    from glob import glob
+    from audiossl.datasets.dcase_utils.datasets import read_audio
+    from tqdm import tqdm
+
+
+    running_stats = []
+    filenames = glob(path_1 + "*.wav") + glob(path_2 + "*.wav")
+    # filenames = filenames[:100]
+    element = 0
+    for file in tqdm(filenames):
+        wav, _, _, _ = read_audio(file, random_channel=False, multisrc=False, pad_to=None)
+        wav = (wav - wav.mean()).unsqueeze(0)
+        melspec = torchaudio.compliance.kaldi.fbank(
+            wav, 
+            htk_compat=True, 
+            sample_frequency=audio_configs["sr"], 
+            use_energy=False, 
+            window_type='hanning', 
+            num_mel_bins=audio_configs["n_mels"], 
+            dither=0.0, 
+            frame_shift=10
+            )
+        running_stats.append(melspec)
+        element += melspec.numel()
+    # calculate mean
+    running_mean = 0
+    for emd in running_stats:
+        running_mean += emd.sum().item() / element
+
+    running_std = 0
+    for emd in running_stats:
+        running_std += ((emd - running_mean) ** 2).sum().item() / element
+    running_std = running_std
+    print(running_mean, math.sqrt(running_std))
+    return running_mean, running_std
+
+
+if __name__ == "__main__":
+    fake_wav = torch.rand([160000])
+    module = SSASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/SSAST-Base-Frame-400.pth")
+    fake_fb, _ = module.transform(fake_wav)
+    fake_batch = fake_fb.unsqueeze(0).expand(10, -1, -1)
+    fake_output, _ = module(((fake_batch, 0), 0))
+    print(module.encoder)
+    
+    module.finetune_mode()
+    module.finetune_mannual_train()

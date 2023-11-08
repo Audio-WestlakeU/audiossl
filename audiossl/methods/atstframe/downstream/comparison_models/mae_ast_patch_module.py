@@ -1,0 +1,106 @@
+import torch
+import torchaudio
+
+import pytorch_lightning as pl
+import torch.nn as nn
+from audiossl.methods.atst.downstream.utils_dcase.comparison_models.mae_ast_patch import MAE_AST
+
+audio_configs = {
+    "feature_type": "fbank", 
+    "sample_rate": 16000,
+    "max_sample_size": 250000,
+    "min_sample_size": 32000,
+    "feature_rate": 100,
+    "feature_dim": 128,
+    "normalize": False, # must be consistent with extractor
+    "deltas": False
+}
+
+class MAEASTModel(MAE_AST):
+    def __init__(self):
+        super().__init__()
+        self.pad_matrix = torch.zeros(256, 998)
+        self.feat_mean = torch.nn.AvgPool1d(8, 8)
+    
+    def forward(self, source, mask=False, ret_conv=False, output_layer=None):
+        res = super().forward(
+            source,
+            padding_mask=self.pad_matrix.to(source).bool(),
+            mask=mask,
+            features_only=True,
+            output_layer=output_layer,
+        )
+        feature = res["features"] if ret_conv else res["x"]
+        feature = feature.transpose(-1, -2)
+        feature = self.feat_mean(feature).transpose(-1, -2)
+        return feature, res["padding_mask"]
+
+class PatchMAEASTPredModule(pl.LightningModule):
+    def __init__(self, pertrained_ckpt_path) -> None:
+        super(PatchMAEASTPredModule, self).__init__()
+        self.encoder = MAEASTModel()
+        self.embed_dim = 768
+        load_weigts = torch.load(pertrained_ckpt_path)
+        state_dicts = load_weigts["model"]
+        self.encoder.load_state_dict(state_dict=state_dicts, strict=True)
+        print("Using layer norm:", self.encoder.encoder.layer_norm_first)
+
+    def forward(self, batch):
+        (x, length), y = batch
+        x, _ = self.encoder(x)
+        return x, y
+
+    def transform(self, wav):
+        wav = wav.unsqueeze(0)
+        feat = torchaudio.compliance.kaldi.fbank(
+                waveform=wav,
+                sample_frequency=audio_configs["sample_rate"],
+                use_energy=False,
+                num_mel_bins=audio_configs["feature_dim"],
+                frame_shift=10
+            )
+        feat = feat[:, :audio_configs["feature_dim"]]
+        return feat, feat.shape[0]
+    
+    def finetune_mode(self):
+        # self.freeze()
+        # # Unfreeze last tfm block
+        # for i, layer in enumerate(self.encoder.encoder.layers):
+        #     if i == len(self.encoder.encoder.layers) - 1:
+        #         for n, p in layer.named_parameters():
+        #             p.requires_grad = True
+        for n, p in self.named_parameters():
+            if (".decoder" in n) or \
+               (".final_proj" in n) or \
+               ("encoder_mask_emb" in n) or \
+               ("encoder.layer_norm" in n):
+                p.requires_grad = False
+            else:
+                p.requires_grad = True
+
+    def finetune_mannual_train(self):
+        # for i, layer in enumerate(self.encoder.encoder.layers):
+        #     if i == len(self.encoder.encoder.layers) - 1:
+        #         layer.train()
+        self.train()
+
+
+if __name__ == "__main__":
+    module = PatchMAEASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/chunk_patch_75_12LayerEncoder.pt")
+    model = MAEASTModel()
+    feat_mean = nn.AvgPool1d(4, 4)
+    fake_input = torch.rand(10, 998, 128)
+    fake_output, _ = model(fake_input)
+    
+    test_zeros = torch.zeros(1024).reshape(32, -1).float().cuda("cuda:2")
+    test_ones = torch.ones(1024).reshape(32, -1).float().cuda("cuda:2")  
+    test_square = torch.concat([test_zeros, test_ones], dim=0)  
+    test_square = test_square.unsqueeze(0).unsqueeze(0)
+    print(test_square.shape)
+    
+    print(test_square)
+    unfold_square = model.unfold(test_square)
+    unfold_square = feat_mean(unfold_square).transpose(-1, -2)
+    print(unfold_square)
+    print(unfold_square.shape)
+    print(fake_output.shape)
