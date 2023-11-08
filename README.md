@@ -19,7 +19,7 @@ for Both Clip-level and Frame-level Tasks(Under Review at TASLP)](https://arxiv.
 ## Install
 ------------------------
 
-1. install pytorch ( version 1.10.1 or higher )
+1. install pytorch ( version 1.12.1 or higher )
 
 
 ```

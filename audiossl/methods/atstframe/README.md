@@ -84,10 +84,10 @@ Click to download
 
 - Train a base model (using 6 GPUs)
     ```
-    CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6 python train.py --arch small \ 
+    CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python train.py --arch small \ 
     --data_path YOUR_DATA_PATH  \
     --save_path YOUR_MODEL_SAVE_PATH \ 
-    --nproc 7 --batch_size_per_gpu 144 --warmup_steps 19900 \
+    --nproc 6 --batch_size_per_gpu 144 --warmup_steps 19900 \
     --max_steps 398000 \
     --ema 0.9996 \
     --subset 3000000 \
@@ -106,7 +106,7 @@ Click to download
 
 ## Train ATST-C2F
 
-This work proposes a method to combine ATST-Clip and ATST-Frame through distill knowleadge from fintuned ATST-Clip to ATST-Frame. First, finetune ATST-Clip on a downstream task; Second, fintune ATST-Frame on the same downstream task using a multi-task loss: ground truth loss + distilation loss.
+Besides ATST-Clip and ATST-Frame, this work also proposes a method to combine ATST-Clip and ATST-Frame through distilling knowleadge from fintuned ATST-Clip to ATST-Frame. First, finetune ATST-Clip on a downstream task; Second, fintune ATST-Frame on the same downstream task using a multi-task loss: ground truth loss + distilation loss.
 
 The code nees some cleaning up.  coming soon.
 - AS-2M
