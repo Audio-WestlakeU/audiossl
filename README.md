@@ -23,7 +23,7 @@ for Both Clip-level and Frame-level Tasks(Under Review at TASLP)](https://arxiv.
 
 
 ```
-conda install pytorch=1.10.1 torchvision torchaudio cudatoolkit=11.3 -c pytorch -c nvidia   
+conda install pytorch=1.12.1 torchvision torchaudio cudatoolkit=11.3 -c pytorch -c nvidia   
 
 ```
 
