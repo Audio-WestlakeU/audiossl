@@ -5,3 +5,4 @@ __pycache__
 tmp*
 nohup.out
 ckpts
+logs
