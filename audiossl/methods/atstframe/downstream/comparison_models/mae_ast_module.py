@@ -36,7 +36,7 @@ class MAEASTModel(MAE_AST):
         return feature, res["padding_mask"]
 
 class MAEASTPredModule(pl.LightningModule):
-    def __init__(self, pertrained_ckpt_path) -> None:
+    def __init__(self, pertrained_ckpt_path, dataset_name="as_strong") -> None:
         super(MAEASTPredModule, self).__init__()
         self.encoder = MAEASTModel()
         self.embed_dim = 768
@@ -44,7 +44,9 @@ class MAEASTPredModule(pl.LightningModule):
         state_dicts = load_weigts["model"]
         
         self.encoder.load_state_dict(state_dict=state_dicts, strict=True)
+        self.last_layer = dataset_name == "as_strong"
         print("Using layer norm:", self.encoder.encoder.layer_norm_first)
+
     def forward(self, batch):
         (x, length), y = batch
         x, _ = self.encoder(x)
@@ -63,20 +65,24 @@ class MAEASTPredModule(pl.LightningModule):
         return feat, feat.shape[0]
     
     def finetune_mode(self):
-        # self.freeze()
-        for p in self.encoder.parameters():
-            p.requires_grad = True
-        # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.encoder.layers):
-        #     if i == len(self.encoder.encoder.layers) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+        else:
+            for p in self.encoder.parameters():
+                p.requires_grad = True        
 
     def finetune_mannual_train(self):
-        # for i, layer in enumerate(self.encoder.encoder.layers):
-        #     if i == len(self.encoder.encoder.layers) - 1:
-        #         layer.train()
-        self.encoder.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    layer.train()
+        else:
+            self.encoder.train()
 
 if __name__ == "__main__":
     module = MAEASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/random_frame_75_12LayerEncoder.pt")

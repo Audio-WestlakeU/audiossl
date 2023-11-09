@@ -48,12 +48,13 @@ class SSASTModel(ASTModel):
         return x
 
 class SSASTPredModule(pl.LightningModule):
-    def __init__(self, pretrained_ckpt_path) -> None:
+    def __init__(self, pretrained_ckpt_path, dataset_name="as_strong") -> None:
         super().__init__()
         self.encoder = SSASTModel(label_dim=1, fshape=128, tshape=2, fstride=128, tstride=2, 
                                  input_fdim=128, input_tdim=998, model_size="base", pretrain_stage=False,
                                  load_pretrained_mdl_path=pretrained_ckpt_path)
         self.embed_dim = 768
+        self.last_layer = dataset_name == "as_strong"
         
     def forward(self, batch):
         (x, length), y = batch
@@ -79,25 +80,29 @@ class SSASTPredModule(pl.LightningModule):
         return fbank, fbank.shape[0]
 
     def finetune_mode(self):
-        # self.freeze()
-        # # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.v.blocks):
-        #     if i == len(self.encoder.v.blocks) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
-        # # Unfreeze last norm layer
-        # for n, p in self.encoder.v.norm.named_parameters():
-        #     p.requires_grad = True
-        for n, p in self.named_parameters():
-            print(n)
-            p.requires_grad = True
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.v.blocks):
+                if i == len(self.encoder.v.blocks) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+            # Unfreeze last norm layer
+            for n, p in self.encoder.v.norm.named_parameters():
+                p.requires_grad = True
+        else:
+            for n, p in self.named_parameters():
+                print(n)
+                p.requires_grad = True
 
     def finetune_mannual_train(self):
-        # for i, layer in enumerate(self.encoder.v.blocks):
-        #     if i == len(self.encoder.v.blocks) - 1:
-        #         layer.train()
-        # self.encoder.v.norm.train()
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.v.blocks):
+                if i == len(self.encoder.v.blocks) - 1:
+                    layer.train()
+            self.encoder.v.norm.train()
+        else:
+            self.train()
 
 def calculate_stat(path_1, path_2):
     from glob import glob

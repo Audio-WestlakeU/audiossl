@@ -10,7 +10,7 @@ from nnAudio.features import MelSpectrogram
 
     
 class BYOLAPredModule(pl.LightningModule):
-    def __init__(self, pretrained_ckpt_path, path_to_config="/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/conf/byol_v2.yaml") -> None:
+    def __init__(self, pretrained_ckpt_path, dataset_name="as_strong", path_to_config="./comparison_models/models/byol_v2.yaml") -> None:
         super(BYOLAPredModule, self).__init__()
         cfg = load_yaml_config(path_to_config)
         self.encoder = AudioNTT2022Encoder(n_mels=cfg.n_mels, d=cfg.feature_d)
@@ -18,6 +18,7 @@ class BYOLAPredModule(pl.LightningModule):
         self.embed_dim = 3072
         self.transform = DataTransform(cfg)
         self.unfreeze_ids = [0, 1, 2, 3, 4, 5, 6, 7]
+        self.last_layer = dataset_name == "as_strong" # this bool trigger not used for byola
 
     def forward(self, batch):
         (x, length), y = batch
@@ -25,24 +26,12 @@ class BYOLAPredModule(pl.LightningModule):
         return x, y
     
     def finetune_mode(self):
-        self.freeze()
-        
-        # Unfreeze last tfm block
-        for i in self.unfreeze_ids:
-            layer = getattr(self.encoder.features, f"{i}")
-            for n, p in layer.named_parameters():
-                p.requires_grad = True
-
-        # Unfreeze last norm layer
-        for n, p in self.encoder.fc.named_parameters():
+        for n, p in self.parameters():
             p.requires_grad = True
 
 
     def finetune_mannual_train(self):
-        for i in self.unfreeze_ids:
-            layer = getattr(self.encoder.features, f"{i}")
-            layer.train()
-        self.encoder.fc.train()
+        self.train()
 
 
 def load_yaml_config(path_to_config):

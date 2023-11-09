@@ -56,42 +56,76 @@ class DistillATSTEncoder(pl.LightningModule):
 class DistillATSTPredModule(pl.LightningModule):
     """This module has been modified for frame-level prediction"""
 
-    def __init__(self, distill_mode):
+    def __init__(self, distill_mode, dataset_name="as_strong"):
         super().__init__()
         self.transform = FreezingTransform(max_len=10)
         self.encoder = DistillATSTEncoder(distill_mode)
         self.embed_dim = self.encoder.embed_dim
         self.distill_mode = distill_mode
+        self.last_layer = dataset_name == "as_strong"
 
     def finetune_mode(self):
-        self.freeze()
-        # Unfreeze last tfm block
-        if self.distill_mode == "frame->clip":
-            for n, p in self.encoder.frame_encoder.named_parameters():
-                if "mask_embed" in n:
-                    p.requires_grad = False
-                else:
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            if self.distill_mode == "frame->clip":
+                for i, layer in enumerate(self.encoder.frame_encoder.blocks):
+                    if i == len(self.encoder.frame_encoder.blocks) - 1:
+                        for n, p in layer.named_parameters():
+                            p.requires_grad = True
+                # Unfreeze last norm layer
+                for n, p in self.encoder.frame_encoder.norm_frame.named_parameters():
                     p.requires_grad = True
-            for p in self.encoder.teacher_module.parameters():
-                p.requires_grad = False
+            else:
+                for i, layer in enumerate(self.encoder.clip_encoder.blocks):
+                    if i == len(self.encoder.clip_encoder.blocks) - 1:
+                        for n, p in layer.named_parameters():
+                            p.requires_grad = True    
+                for n, p in self.encoder.clip_encoder.norm.named_parameters():
+                    p.requires_grad = True            
         else:
-            for n, p in self.encoder.clip_encoder.named_parameters():
-                if "mask_embed" in n:
+            # Unfreeze last tfm block
+            if self.distill_mode == "frame->clip":
+                for n, p in self.encoder.frame_encoder.named_parameters():
+                    if "mask_embed" in n:
+                        p.requires_grad = False
+                    else:
+                        p.requires_grad = True
+                for p in self.encoder.teacher_module.parameters():
                     p.requires_grad = False
-                else:
-                    p.requires_grad = True
-            for p in self.encoder.teacher_module.parameters():
-                p.requires_grad = False
-
+            else:
+                for n, p in self.encoder.clip_encoder.named_parameters():
+                    if "mask_embed" in n:
+                        p.requires_grad = False
+                    else:
+                        p.requires_grad = True
+                for p in self.encoder.teacher_module.parameters():
+                    p.requires_grad = False
 
     def finetune_mannual_train(self):
-        if self.distill_mode == "frame->clip":
-            self.encoder.frame_encoder.train()
-            self.encoder.teacher_module.eval()
+        if self.last_layer:
+            if self.distill_mode == "frame->clip":
+                self.encoder.frame_encoder.train()
+                self.encoder.teacher_module.eval()
+                for i, layer in enumerate(self.encoder.frame_encoder.blocks):
+                    if i == len(self.encoder.frame_encoder.blocks) - 1:
+                        layer.train()
+                self.encoder.frame_encoder.norm_frame.train()
+            elif self.distill_mode == "clip->frame":
+                self.encoder.clip_encoder.train()
+                self.encoder.teacher_module.eval()
+                for i, layer in enumerate(self.encoder.clip_encoder.blocks):
+                    if i == len(self.encoder.clip_encoder.blocks) - 1:
+                        layer.train()
+                self.encoder.clip_encoder.norm.train()
+        else:
+            if self.distill_mode == "frame->clip":
+                self.encoder.frame_encoder.train()
+                self.encoder.teacher_module.eval()
 
-        elif self.distill_mode == "clip->frame":
-            self.encoder.clip_encoder.train()
-            self.encoder.teacher_module.eval()
+            elif self.distill_mode == "clip->frame":
+                self.encoder.clip_encoder.train()
+                self.encoder.teacher_module.eval()
         
 
     def forward(self, batch):

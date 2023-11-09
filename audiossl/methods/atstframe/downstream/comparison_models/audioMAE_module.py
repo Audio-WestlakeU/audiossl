@@ -62,10 +62,11 @@ class AudioMAEModel(pl.LightningModule):
         return x
 
 class AudioMAEPredModule(pl.LightningModule):
-    def __init__(self, pretrained_path) -> None:
+    def __init__(self, pretrained_path, dataset_name="as_strong") -> None:
         super().__init__()
         self.encoder = AudioMAEModel(pretrained_path)
         self.embed_dim = 768
+        self.last_layer = dataset_name == "as_strong"
         
     def forward(self, batch):
         (x, length), y = batch
@@ -91,11 +92,28 @@ class AudioMAEPredModule(pl.LightningModule):
         return fbank, fbank.shape[1]
 
     def finetune_mode(self):
-        for n, p in self.encoder.named_parameters():
-            if ".head." in n:
-                p.requires_grad = False
-            else:
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.encoder.blocks):
+                if i == len(self.encoder.encoder.blocks) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+        else:
+            # Unfreeze last norm layer
+            for n, p in self.encoder.encoder.norm.named_parameters():
                 p.requires_grad = True
+            for n, p in self.encoder.named_parameters():
+                if ".head." in n:
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
 
     def finetune_mannual_train(self):
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.encoder.blocks):
+                if i == len(self.encoder.encoder.blocks) - 1:
+                    layer.train()
+            self.encoder.encoder.norm.train()
+        else:
+            self.train()

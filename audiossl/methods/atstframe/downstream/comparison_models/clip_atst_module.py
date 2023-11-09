@@ -7,13 +7,14 @@ from audiossl.methods.atst.downstream.transform import FreezingTransform
 class ATSTPredModule(pl.LightningModule):
     """This module has been modified for frame-level prediction"""
 
-    def __init__(self, pretrained_ckpt_path=None, **kwargs):
+    def __init__(self, pretrained_ckpt_path=None, dataset_name="as_strong", **kwargs):
         super().__init__()
         self.encoder = AST_base(use_cls=True, **kwargs)
         if pretrained_ckpt_path is not None:
             load_pretrained_weights(self.encoder, pretrained_ckpt_path, checkpoint_key="teacher")
         self.embed_dim = self.encoder.embed_dim
         self.transform = FreezingTransform(max_len=10)
+        self.last_layer = dataset_name == "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch
@@ -28,24 +29,28 @@ class ATSTPredModule(pl.LightningModule):
         return x, y
 
     def finetune_mode(self):
-        # self.freeze()
-        # # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.blocks):
-        #     if i == len(self.encoder.blocks) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
-        # # Unfreeze last norm layer
-        # for n, p in self.encoder.norm.named_parameters():
-        #     p.requires_grad = True
-        for n, p in self.encoder.named_parameters():
-            if "mask_embed" in n:
-                p.requires_grad = False
-            else:
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.blocks):
+                if i == len(self.encoder.blocks) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+            # Unfreeze last norm layer
+            for n, p in self.encoder.norm.named_parameters():
                 p.requires_grad = True
+        else:
+            for n, p in self.encoder.named_parameters():
+                if "mask_embed" in n:
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
 
     def finetune_mannual_train(self):
-        # for i, layer in enumerate(self.encoder.blocks):
-        #     if i == len(self.encoder.blocks) - 1:
-        #         layer.train()
-        # self.encoder.norm.train()
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.blocks):
+                if i == len(self.encoder.blocks) - 1:
+                    layer.train()
+            self.encoder.norm.train()
+        else:
+            self.train()

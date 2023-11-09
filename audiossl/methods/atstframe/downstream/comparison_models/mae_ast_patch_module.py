@@ -36,13 +36,14 @@ class MAEASTModel(MAE_AST):
         return feature, res["padding_mask"]
 
 class PatchMAEASTPredModule(pl.LightningModule):
-    def __init__(self, pertrained_ckpt_path) -> None:
+    def __init__(self, pertrained_ckpt_path, dataset_name="as_strong") -> None:
         super(PatchMAEASTPredModule, self).__init__()
         self.encoder = MAEASTModel()
         self.embed_dim = 768
         load_weigts = torch.load(pertrained_ckpt_path)
         state_dicts = load_weigts["model"]
         self.encoder.load_state_dict(state_dict=state_dicts, strict=True)
+        self.last_layer = dataset_name == "as_strong"
         print("Using layer norm:", self.encoder.encoder.layer_norm_first)
 
     def forward(self, batch):
@@ -63,26 +64,30 @@ class PatchMAEASTPredModule(pl.LightningModule):
         return feat, feat.shape[0]
     
     def finetune_mode(self):
-        # self.freeze()
-        # # Unfreeze last tfm block
-        # for i, layer in enumerate(self.encoder.encoder.layers):
-        #     if i == len(self.encoder.encoder.layers) - 1:
-        #         for n, p in layer.named_parameters():
-        #             p.requires_grad = True
-        for n, p in self.named_parameters():
-            if (".decoder" in n) or \
-               (".final_proj" in n) or \
-               ("encoder_mask_emb" in n) or \
-               ("encoder.layer_norm" in n):
-                p.requires_grad = False
-            else:
-                p.requires_grad = True
+        if self.last_layer:
+            for n, p in self.named_parameters():
+                if (".decoder" in n) or \
+                (".final_proj" in n) or \
+                ("encoder_mask_emb" in n) or \
+                ("encoder.layer_norm" in n):
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
+        else:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
 
     def finetune_mannual_train(self):
-        # for i, layer in enumerate(self.encoder.encoder.layers):
-        #     if i == len(self.encoder.encoder.layers) - 1:
-        #         layer.train()
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    layer.train()
+        else:
+            self.train()
 
 
 if __name__ == "__main__":

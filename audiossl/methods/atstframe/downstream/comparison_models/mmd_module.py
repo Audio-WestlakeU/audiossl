@@ -39,11 +39,12 @@ class MMDModel(RuntimeM2D):
         return x if len(emb.shape) == 3 else [x_ for x_ in x]
     
 class MMDPredModule(pl.LightningModule):
-    def __init__(self, pretrained_path) -> None:
+    def __init__(self, pretrained_path, dataset_name="as_strong") -> None:
         super(MMDPredModule, self).__init__()
         self.encoder = MMDModel(weight_file=pretrained_path)
         self.embed_dim = 3840
         self.transform = DataTransform()
+        self.last_layer = dataset_name == "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch
@@ -51,14 +52,30 @@ class MMDPredModule(pl.LightningModule):
         return x, y
 
     def finetune_mode(self):
-        for n, p in self.encoder.named_parameters():
-            if (".target" in n) or (".decoder" in n) or ("mask_token" in n):
-                p.requires_grad = False
-            else:
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.backbone.blocks):
+                if i == len(self.encoder.backbone.blocks) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+            for n, p in self.encoder.backbone.norm.named_parameters():
                 p.requires_grad = True
+        else:
+            for n, p in self.encoder.named_parameters():
+                if (".target" in n) or (".decoder" in n) or ("mask_token" in n):
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
 
     def finetune_mannual_train(self):
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.backbone.blocks):
+                if i == len(self.encoder.backbone.blocks) - 1:
+                    layer.train()
+            self.encoder.backbone.norm.train()
+        else:
+            self.train()
 
     def cal_state(self, filename_1, filename_2):
         means, stds = [], []

@@ -17,7 +17,7 @@ audio_configs = {
 
 
 class BeatsPredModule(pl.LightningModule):
-    def __init__(self, pertrained_ckpt_path) -> None:
+    def __init__(self, pertrained_ckpt_path, dataset_name="as_strong") -> None:
         super(BeatsPredModule, self).__init__()
         checkpoint = torch.load(pertrained_ckpt_path)
         cfg = BEATsConfig(checkpoint["cfg"])
@@ -25,18 +25,14 @@ class BeatsPredModule(pl.LightningModule):
         cfg.set("encoder_layerdrop", 0.0)
         self.encoder = BEATs(cfg)
         self.encoder.load_state_dict(checkpoint["model"])
-        
         self.feat_mean = nn.AvgPool1d(8, 8)
         self.embed_dim = 768
         self.opt_len = [len(self.encoder.encoder.layers) - (i + 1) for i in range(3)]
+        self.last_layer = dataset_name == "as_strong"
 
 
     def forward(self, batch):
         (x, length), y = batch
-        # padding_mask = torch.ones(x.shape)
-        # for i in range(len(padding_mask)):
-        #     padding_mask[i, :length[i]] = 0
-        # padding_mask = padding_mask.bool().to(x)
         x = self.encoder.extract_features(x, None)[0]
         x = self.feat_mean(x.transpose(-1, -2)).transpose(-1, -2)
         return x, y
@@ -51,22 +47,26 @@ class BeatsPredModule(pl.LightningModule):
         return fbank, fbank.shape[0]
     
     def finetune_mode(self):
-        # self.freeze()
-        # for i, layer in enumerate(self.encoder.encoder.layers):
-        #     if i in self.opt_len:
-        #         print("unfreeze:", i)
-        #         for n, p in layer.named_parameters():
-        #             if "relative_attention_bias" not in n:
-        #                 p.requires_grad = True
-        for p in self.encoder.parameters():
-            p.requires_grad = True
+        if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    print("unfreeze:", i)
+                    for n, p in layer.named_parameters():
+                        if "relative_attention_bias" not in n:
+                            p.requires_grad = True
+        else:
+            for p in self.encoder.parameters():
+                p.requires_grad = True
 
     def finetune_mannual_train(self):
-        # self.eval()
-        # for i, layer in enumerate(self.encoder.encoder.layers):
-        #     if i in self.opt_len:
-        #         layer.train()
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    layer.train()
+        else:
+            self.train()
 
 def calculate_stat(path_1, path_2):
     from torch.utils.data import DataLoader

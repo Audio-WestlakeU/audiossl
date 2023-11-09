@@ -1,0 +1,36 @@
+training:
+  batch_size: [128, 128]
+  median_window: 7
+  n_test_thresholds: 50
+data:
+  synth_train_num: 10000
+  synth_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/synthetic21_train/soundscapes_16k/"
+  synth_folder_44k: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/synthetic21_train/soundscapes/"
+  synth_tsv:  "/home/shaonian/Datasets/DCASE/dcase2021/dataset/metadata/train/synthetic21_train/soundscapes.tsv"
+  weak_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/weak_16k/"
+  weak_folder_44k: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/weak/"
+  weak_tsv: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/metadata/train/weak.tsv"
+  unlabeled_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/unlabel_in_domain_16k/"
+  unlabeled_folder_44k: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/unlabel_in_domain/"
+  synth_val_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/validation/synthetic21_validation/soundscapes_16k/"
+  synth_val_folder_44k: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/validation/synthetic21_validation/soundscapes/"
+  synth_val_tsv:  "/home/shaonian/Datasets/DCASE/dcase2021/dataset/metadata/validation/synthetic21_validation/soundscapes.tsv"
+  synth_val_dur: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/metadata/validation/synthetic21_validation/durations.tsv"
+  test_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/validation/validation_16k/"
+  test_folder_44k: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/validation/validation/"
+  test_tsv: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/metadata/validation/validation.tsv"
+  test_dur: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/metadata/validation/validation_durations.tsv"
+  eval_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/eval21_16k"
+  eval_folder_44k: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/eval21"
+  audio_max_len: 10
+  fs: 16000
+  net_subsample: 4
+feats:
+  n_mels: 128
+  n_filters: 2048
+  hop_length: 160
+  n_window: 2048
+  sample_rate: 16000
+  f_min: 0
+  f_max: 8000
+

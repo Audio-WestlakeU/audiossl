@@ -13,7 +13,6 @@ from audiossl.methods.atstframe.downstream.comparison_models.patch_ssast_module 
 from audiossl.methods.atstframe.downstream.comparison_models.mae_ast_patch_module import PatchMAEASTPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.frame_atst_module import FrameATSTPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.beats_module import BeatsPredModule
-from audiossl.methods.atstframe.downstream.comparison_models.ast_module import PatchASTPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.audioMAE_module import AudioMAEPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.mmd_module import MMDPredModule
 from audiossl.datasets.dcase_utils import collate_fn
@@ -161,8 +160,6 @@ def main():
         pretrained_module = PatchSSASTPredModule(args.pretrained_ckpt_path)
     elif args.arch == "patchmaeast":
         pretrained_module = PatchMAEASTPredModule(args.pretrained_ckpt_path)
-    elif args.arch == "ast":
-        pretrained_module = PatchASTPredModule(args.pretrained_ckpt_path)
     elif args.arch == "audioMAE":
         pretrained_module = AudioMAEPredModule(args.pretrained_ckpt_path)
     elif args.arch == "mmd":

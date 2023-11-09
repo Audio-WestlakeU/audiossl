@@ -45,12 +45,13 @@ class SSASTModel(ASTModel):
         return x
 
 class PatchSSASTPredModule(pl.LightningModule):
-    def __init__(self, pretrained_ckpt_path) -> None:
+    def __init__(self, pretrained_ckpt_path, dataset_name="as_strong") -> None:
         super().__init__()
         self.encoder = SSASTModel(label_dim=1, fshape=16, tshape=16, fstride=16, tstride=16, 
                                  input_fdim=128, input_tdim=998, model_size="base", pretrain_stage=False,
                                  load_pretrained_mdl_path=pretrained_ckpt_path)
         self.embed_dim = 768
+        self.last_layer = dataset_name == "as_strong"
         
     def forward(self, batch):
         (x, length), y = batch
@@ -76,14 +77,32 @@ class PatchSSASTPredModule(pl.LightningModule):
         return fbank, fbank.shape[0]
 
     def finetune_mode(self):
-        for n, p in self.named_parameters():
-            if (".v.head" in n) or (".mlp_head." in n):
-                p.requires_grad = False
-            else:
+        if self.last_layer:
+            for n, p in self.named_parameters():
+                if (".v.head" in n) or (".mlp_head." in n):
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
+        else:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.v.blocks):
+                if i == len(self.encoder.v.blocks) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+            # Unfreeze last norm layer
+            for n, p in self.encoder.v.norm.named_parameters():
                 p.requires_grad = True
 
     def finetune_mannual_train(self):
-        self.train()
+        if self.last_layer:
+            for i, layer in enumerate(self.encoder.v.blocks):
+                if i == len(self.encoder.v.blocks) - 1:
+                    layer.train()
+            self.encoder.v.norm.train()        
+        else:
+            self.train()
+
 
 
 def calculate_stat(path_1, path_2):

@@ -26,6 +26,7 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
     compute_per_intersection_macro_f1,
     compute_psds_from_operating_points
 )
+
 '''
 This file is modified from model.py
 '''
@@ -61,14 +62,20 @@ class LinearHead(nn.Module):
             x = self.norm(x)
         x = x.squeeze(-1).transpose(1, 2)
         # linear layer + get strong predictions
-        strong = self.sigmoid(self.linear(x) / temp)
+        strong_logits = self.linear(x)
+        strong = self.sigmoid(strong_logits / temp)
+
+        ### weak logits generated after linear softmax!!!
+        weak_logits = self.linear_softmax(x)
 
         # linear layer + get weak predictions
-        soft = self.softmax(self.linear_softmax(x)).clamp(min=1e-7, max=1)
+        soft = self.softmax(weak_logits).clamp(min=1e-7, max=1)
         weak = (strong * soft).sum(1) / soft.sum(1)
+
         return strong.transpose(1, 2), weak
 
-class FineTuningPLModule(LightningModule):
+
+class DistillPLModule(LightningModule):
     def __init__(self,
                  encoder,
                  learning_rate,
@@ -77,13 +84,16 @@ class FineTuningPLModule(LightningModule):
                  niter_per_epoch,
                  warmup_epochs,
                  num_labels,
+                 n_last_blocks=1,
                  multi_label=False,
                  mixup_training=False,
                  metric_save_dir=None,
-                 freeze_mode=False):
+                 freeze_mode=False,
+                 distill_mode="clip->frame"):
         super().__init__()
         self.freeze_mode = freeze_mode
         self.learning_rate = learning_rate
+        print("Using learning rate:", learning_rate)
         self.max_epochs = max_epochs
         self.warumup_epochs = warmup_epochs
         self.niter_per_epoch = niter_per_epoch
@@ -102,6 +112,7 @@ class FineTuningPLModule(LightningModule):
                                                      warmup_epochs)
 
         self.save_hyperparameters(ignore=["encoder", ])
+        self.distill_mode = distill_mode
         with open(dcase_conf, "r") as f:
             self.config = yaml.safe_load(f)
         self.pred_decoder = ManyHotEncoder(
@@ -119,11 +130,17 @@ class FineTuningPLModule(LightningModule):
             average="macro",
             compute_on_step=False,
         )
+        self.get_weak_teacher_f1_seg_macro = tm.F1Score(
+            task="multilabel",
+            num_labels=len(self.pred_decoder.labels),
+            average="macro",
+            compute_on_step=False,
+        )
 
         # buffer for event based scores which we compute using sed-eval
         self.median_filter = MedianPool2d(self.config["training"]["median_window"], same=True)
         self.sed_metrics_student = SEDMetrics(intersection_thd=0.5)
-
+        self.sed_metrics_teacher = SEDMetrics(intersection_thd=0.5)
         
         test_n_thresholds = self.config["training"]["n_test_thresholds"]
         test_thresholds = np.arange(
@@ -131,20 +148,32 @@ class FineTuningPLModule(LightningModule):
         )
         self.test_psds_buffer = {k: pd.DataFrame() for k in test_thresholds}
         self.decoded_05_buffer = pd.DataFrame()
+        self.ce_loss = nn.CrossEntropyLoss()
 
 
     def training_step(self, batch, batch_idx):
         bsz = self.config["training"]["batch_size"]
         indx_synth, indx_weak = bsz
-        self.encoder.eval()
         if not self.freeze_mode:
             self.encoder.finetune_mannual_train()
         self.schedule()
-        x, labels, _ = batch
+        data, labels, _ = batch
 
-        x, labels = self.encoder((x, labels))
-
-        strong_pred, weak_pred = self.head(x)
+        x, labels = self.encoder((data, labels))
+        if self.distill_mode == "clip->frame":
+            with torch.no_grad():
+                strong_pred_tea, weak_pred_tea = self.encoder.encoder.teacher_module((data, labels))
+            strong_pred_std, weak_pred_std = self.head(x)
+            
+        elif self.distill_mode == "frame->clip":
+            with torch.no_grad():
+                strong_pred_tea, weak_pred_tea = self.encoder.encoder.teacher_module((data, labels))
+            strong_pred_std, weak_pred_std = self.head(x)
+        
+        loss_d_strong = self.loss_fn(strong_pred_std, strong_pred_tea.detach())
+        loss_d_weak = self.loss_fn(weak_pred_std, weak_pred_tea.detach())
+        loss_d = (loss_d_strong + loss_d_weak) / 2
+        # Distillation loss
 
         # Get weak and strong mask for two types of data
         strong_mask = torch.zeros(indx_synth + indx_weak).to(x).bool()
@@ -154,16 +183,19 @@ class FineTuningPLModule(LightningModule):
 
         # Get weak label for real data
         labels_weak = (torch.sum(labels[weak_mask], -1) > 0).float()
-        weak_loss = self.loss_fn(weak_pred[weak_mask], labels_weak)
-        strong_loss = self.loss_fn(strong_pred[strong_mask], labels[strong_mask])
+        weak_loss = self.loss_fn(weak_pred_std[weak_mask], labels_weak)
+        strong_loss = self.loss_fn(strong_pred_std[strong_mask], labels[strong_mask])
 
         tot_loss = weak_loss + strong_loss
+
+        tot_loss = tot_loss / 2 + loss_d / 2
         
         self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True, logger=True)
         self.log("train/real/weak_loss", weak_loss)
         self.log("train/synth/strong_loss", strong_loss)
         self.log("train/total_loss", tot_loss)
-        self.optimizers()
+        self.log("train/distill_loss", loss_d)
+
         return tot_loss
 
     def schedule(self):
@@ -174,9 +206,11 @@ class FineTuningPLModule(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         self.encoder.eval()
-        x, labels, filenames = batch
-        x, labels = self.encoder((x, labels))
+        data, labels, filenames = batch
 
+        x, labels = self.encoder((data, labels))
+        
+        teacher_strong, teacher_weak = self.encoder.encoder.teacher_module((data, labels))
         strong_pred, weak_pred = self.head(x)
         # Get weak and strong mask for two types of data
         mask_weak = (
@@ -184,14 +218,8 @@ class FineTuningPLModule(LightningModule):
             .to(x)
             .bool()
         )
-        
         mask_synth = (
-            torch.tensor(
-                [
-                    str(Path(x).parent) == str(Path(self.config["data"]["synth_val_folder"]))
-                    for x in filenames
-                ]
-            )
+            torch.tensor([str(Path(x).parent) == str(Path(self.config["data"]["synth_val_folder"])) for x in filenames])
             .to(x)
             .bool()
         )
@@ -201,43 +229,63 @@ class FineTuningPLModule(LightningModule):
             loss_weak_student = self.loss_fn(
                 weak_pred[mask_weak], labels_weak
             )
-
+            loss_weak_teacher = self.loss_fn(
+                teacher_weak[mask_weak], labels_weak
+            )
+            self.log("val/weak/teacher/loss_weak", loss_weak_teacher)
             self.log("val/weak/student/loss_weak", loss_weak_student)
             # accumulate f1 score for weak labels
             self.get_weak_student_f1_seg_macro(
                 weak_pred[mask_weak], labels_weak.int()
             )
-
+            self.get_weak_teacher_f1_seg_macro(
+                teacher_weak[mask_weak], labels_weak.int()
+            )
+            
         if torch.any(mask_synth):
             loss_strong_student = self.loss_fn(
                 strong_pred[mask_synth], labels[mask_synth]
             )
+            loss_strong_teacher = self.loss_fn(
+                teacher_strong[mask_synth], labels[mask_synth]
+            )
             self.log("val/synth/student/loss_strong", loss_strong_student)
+            self.log("val/synth/teacher/loss_strong", loss_strong_teacher)
             decoded_student_strong = decode_preds(strong_pred[mask_synth], self.config["training"]["val_thresholds"], self.median_filter)
+            decoded_teacher_strong = decode_preds(teacher_strong[mask_synth], self.config["training"]["val_thresholds"], self.median_filter)
+                        
             self.sed_metrics_student.accm_macro_f1(decoded_student_strong, labels[mask_synth])
+            self.sed_metrics_teacher.accm_macro_f1(decoded_teacher_strong, labels[mask_synth])
+
 
     def on_validation_epoch_end(self):
         weak_student_f1_macro = self.get_weak_student_f1_seg_macro.compute()
-
+        weak_teacher_f1_macro = self.get_weak_teacher_f1_seg_macro.compute()
         # synth dataset
         intersection_f1_macro_student = self.sed_metrics_student.compute_macro_f1()
-
+        intersection_f1_macro_teacher = self.sed_metrics_teacher.compute_macro_f1()
         obj_metric = torch.tensor(weak_student_f1_macro.item() + intersection_f1_macro_student.item())
 
         self.log("val/object_metric", obj_metric, prog_bar=True)
-        self.log("val/weak/student/macro_F1", weak_student_f1_macro)
-        self.log("val/synth/student/intersection_f1_macro", intersection_f1_macro_student)
+        self.log("val/weak/student/macro_F1", weak_student_f1_macro, on_epoch=True)
+        self.log("val/weak/teacher/macro_F1", weak_teacher_f1_macro, on_epoch=True)
+        self.log("val/synth/teacher/intersection_f1_macro", intersection_f1_macro_teacher, on_epoch=True)
+        self.log("val/synth/student/intersection_f1_macro", intersection_f1_macro_student, on_epoch=True)
 
         self.get_weak_student_f1_seg_macro.reset()
+        self.get_weak_teacher_f1_seg_macro.reset()
         return obj_metric
 
     def test_step(self, batch, batch_idx):
         self.encoder.eval()
 
-        x, labels, filenames = batch
-        x, labels = self.encoder((x, labels))
+        data, labels, filenames = batch
+        x, labels = self.encoder((data, labels))
+        
+        if self.distill_mode == "clip-->frame":
+            teacher_strong, teacher_weak = self.encoder.encoder.teacher_module((data, labels))
 
-        strong_pred, _ = self.head(x)
+        strong_pred, weak_pred = self.head(x)
 
         # Get weak label for real data
         test_loss = self.loss_fn(strong_pred, labels)
@@ -263,6 +311,9 @@ class FineTuningPLModule(LightningModule):
             thresholds=[0.5],
         )
         self.decoded_05_buffer = self.decoded_05_buffer.append(decoded_strong[0.5])
+
+        self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True, logger=True)
+        
         return
 
     def on_test_epoch_end(self) -> None:
@@ -333,12 +384,20 @@ class FineTuningPLModule(LightningModule):
                 )
         # Finetune opt
         else:
-            optimizer = torch.optim.SGD(
-                list(self.encoder.encoder.parameters()) + list(self.head.parameters()),
-                self.learning_rate,
-                momentum=0.9,
-                weight_decay=0,
-                )
+            if self.distill_mode == "frame->clip":
+                optimizer = torch.optim.SGD(
+                    list(self.encoder.encoder.frame_encoder.parameters()) + list(self.head.parameters()),
+                    self.learning_rate,
+                    momentum=0.9,
+                    weight_decay=0,
+                    )
+            elif self.distill_mode == "clip->frame":
+                optimizer = torch.optim.SGD(
+                    list(self.encoder.encoder.clip_encoder.parameters()) + list(self.head.parameters()),
+                    self.learning_rate,
+                    momentum=0.9,
+                    weight_decay=0,
+                    )
         return [optimizer]
 
     @staticmethod
