@@ -87,24 +87,3 @@ class PatchMAEASTPredModule(pl.LightningModule):
                     layer.train()
         else:
             self.train()
-
-
-if __name__ == "__main__":
-    module = PatchMAEASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/chunk_patch_75_12LayerEncoder.pt")
-    model = MAEASTModel()
-    feat_mean = nn.AvgPool1d(4, 4)
-    fake_input = torch.rand(10, 998, 128)
-    fake_output, _ = model(fake_input)
-    
-    test_zeros = torch.zeros(1024).reshape(32, -1).float().cuda("cuda:2")
-    test_ones = torch.ones(1024).reshape(32, -1).float().cuda("cuda:2")  
-    test_square = torch.concat([test_zeros, test_ones], dim=0)  
-    test_square = test_square.unsqueeze(0).unsqueeze(0)
-    print(test_square.shape)
-    
-    print(test_square)
-    unfold_square = model.unfold(test_square)
-    unfold_square = feat_mean(unfold_square).transpose(-1, -2)
-    print(unfold_square)
-    print(unfold_square.shape)
-    print(fake_output.shape)

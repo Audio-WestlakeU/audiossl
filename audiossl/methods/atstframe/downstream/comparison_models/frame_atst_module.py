@@ -71,11 +71,3 @@ def get_frame_atst(pretrained_ckpt_path, **kwargs):
     pretrained_encoder = pretrained_model.model.teacher.encoder
     pretrained_encoder.hyper_param = s['hyper_parameters']
     return pretrained_encoder
-
-if __name__ == "__main__":
-    
-    atst_module = FrameATSTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/last.ckpt")
-    fake_input = torch.rand(64, 64, 1001)
-    lengths = torch.tensor([1001] * 64).float()
-    fake_output, _ = atst_module(((fake_input, lengths), 0))
-    print(fake_output.shape, fake_input.shape)

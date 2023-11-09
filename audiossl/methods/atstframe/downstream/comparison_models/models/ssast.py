@@ -450,14 +450,3 @@ class ASTModel(nn.Module):
             return self.mpc(x, mask_patch=mask_patch, cluster=cluster, show_mask=True)
         else:
             raise Exception('Task unrecognized.')
-
-
-if __name__ == '__main__':
-    # this is an example of how to use the SSAST model
-    pretrained_path = "/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/SSAST-Base-Frame-400.pth"
-    fake_input = torch.rand(10, 998, 128)
-    audio_model = ASTModel(label_dim=1, fshape=128, tshape=2, fstride=128, tstride=2,
-                       input_fdim=128, input_tdim=998, model_size="base", pretrain_stage=False,
-                       load_pretrained_mdl_path=pretrained_path)
-    feats = audio_model(fake_input, task='ft_avgtok')
-    print(feats.shape)

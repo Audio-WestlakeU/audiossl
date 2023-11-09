@@ -114,16 +114,3 @@ def calc_norm_stats(path_1, path_2, path_to_config):
     norm_stats = np.array([X.mean(), X.std()])
     print(norm_stats)
     return norm_stats
-
-
-if __name__ == "__main__":
-    # pretrained_module = BYOLAPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/AudioNTT2022-BYOLA-64x96d2048.pth")
-    # fake_data = torch.rand([10, 160000])
-    # fake_fb, length = pretrained_module.transform(fake_data)
-    # fake_output, _ = pretrained_module(((fake_fb, 0), 0))
-    # print(fake_fb.shape, fake_output.shape)
-    # print(length)
-    path_1 = "/data/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/synthetic21_train/soundscapes_16k/"
-    path_2 = "/data/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/weak_16k/"
-    conf_path = "/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/conf/byol_v2.yaml"
-    calc_norm_stats(path_1, path_2, conf_path)

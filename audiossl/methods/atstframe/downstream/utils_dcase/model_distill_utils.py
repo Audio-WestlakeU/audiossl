@@ -99,9 +99,9 @@ class FineTuningPLModule(LightningModule):
         self.niter_per_epoch = niter_per_epoch
         self.metric_save_dir = metric_save_dir
         if mode == "clip":
-            pretrained_module = ATSTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/dcase_logs/base.ckpt")
+            pretrained_module = ATSTPredModule("./comparison_models/ckpts/clip_atst.ckpt")
         elif mode == "frame":
-            pretrained_module = FrameATSTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/last.ckpt")
+            pretrained_module = FrameATSTPredModule("./comparison_models/ckpts/frame_atst.ckpt")
         self.encoder = pretrained_module
         self.head = LinearHead(768, 10, use_norm=False, affine=False)
         self.multi_label = multi_label

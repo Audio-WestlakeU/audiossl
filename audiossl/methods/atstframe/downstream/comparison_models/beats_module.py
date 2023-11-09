@@ -111,27 +111,3 @@ def calculate_stat(path_1, path_2):
         print(last_mean, np.sqrt(last_std))
     print(last_mean, np.sqrt(last_std))
     return last_mean, last_std
-
-
-if __name__ == "__main__":
-    # module = BeatsPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/BEATs_iter3.pt").cuda("cuda:2")
-    # module.freeze()
-    # fake_input = torch.randn(128, 160000).cuda("cuda:2")
-    # Test forward
-    # for _ in range(10000000000000):
-    # fake_output, _ = module(((fake_input, None), None))
-    # print(fake_output.shape)
-    # print(fake_output)
-    a, b = calculate_stat("/home/shaonian/Datasets/AudioSet_strong/data/train/", None)
-    # test_zeros = torch.zeros(1024).reshape(32, -1).float().cuda("cuda:2")
-    # test_ones = torch.ones(1024).reshape(32, -1).float().cuda("cuda:2")
-    # test_square = torch.concat([test_zeros, test_ones], dim=1)
-    
-    # test_square = test_square.unsqueeze(0).unsqueeze(0)
-    # print(test_square.shape)
-    # unfold_square = module.encoder.patch_embedding(test_square)
-    # unfold_square = unfold_square.reshape(unfold_square.shape[0], unfold_square.shape[1], -1)
-    # unfold_square = unfold_square.transpose(1, 2)
-    # print(unfold_square[0, :, :10])
-    # print(unfold_square.shape)
-    # print(fake_output.shape)

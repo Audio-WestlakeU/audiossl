@@ -107,17 +107,3 @@ class DataTransform:
         lms = (x + torch.finfo().eps).log()
         lms = (lms - (-8.6463)) / (2.6721 + torch.finfo().eps)
         return lms, lms.shape[1]
-
-if __name__ == "__main__": 
-    path_1 = "/data/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/synthetic21_train/soundscapes_16k/"
-    path_2 = "/data/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/weak_16k/"
-    conf_path = "/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/conf/byol_v2.yaml"
-    module = MMDPredModule()
-    fake_input = torch.rand(10, 160000)
-    print("input:", fake_input.shape)
-    fake_feature, _ = module.transform(fake_input)
-    print("feature:", fake_feature.shape)
-    fake_output = module.encoder(fake_feature.unsqueeze(1))
-    print("output:", fake_output.shape)
-    module.finetune_mode()
-    module.finetune_mannual_train()

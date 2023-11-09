@@ -140,14 +140,3 @@ def calculate_stat(path_1, path_2):
     print(running_mean, math.sqrt(running_std))
     return running_mean, running_std
 
-
-if __name__ == "__main__":
-    fake_wav = torch.rand([160000])
-    module = SSASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/SSAST-Base-Frame-400.pth")
-    fake_fb, _ = module.transform(fake_wav)
-    fake_batch = fake_fb.unsqueeze(0).expand(10, -1, -1)
-    fake_output, _ = module(((fake_batch, 0), 0))
-    print(module.encoder)
-    
-    module.finetune_mode()
-    module.finetune_mannual_train()

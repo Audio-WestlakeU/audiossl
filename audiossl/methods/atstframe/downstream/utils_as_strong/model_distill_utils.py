@@ -6,9 +6,9 @@ class DistillTeacherModule(FineTuningPLModule):
     def __init__(self,
                  mode="clip"):
         if mode == "clip":
-            encoder = ATSTPredModule("/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/clip_atst.ckpt")
+            encoder = ATSTPredModule("./comparison_models/ckpts/clip_atst.ckpt")
         elif mode == "frame":
-            encoder = FrameATSTPredModule("/home/shaonian/audioset_strong_downstream/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/frame_atst.ckpt")
+            encoder = FrameATSTPredModule("./comparison_models/ckpts/frame_atst.ckpt")
         super().__init__(encoder=encoder, learning_rate=None, max_epochs=None, warmup_epochs=None, num_labels=407, niter_per_epoch=None)
 
     def forward(self, batch):
