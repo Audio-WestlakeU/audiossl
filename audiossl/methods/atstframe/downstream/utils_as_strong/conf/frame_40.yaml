@@ -7,7 +7,7 @@ data: # change with your paths if different.
   test_folder_44k: "/home/shaonian/Datasets/AudioSet_strong/data/eval/"
   test_tsv: "/home/shaonian/Datasets/AudioSet_strong/meta/eval/eval_rm_intersect.tsv"
   test_dur: "/home/shaonian/Datasets/AudioSet_strong/meta/eval/eval_durations.tsv"
-  label_dict: 
+  label_dict: "/home/shaonian/Datasets/AudioSet_strong/meta/common_labels.txt"
   audio_max_len: 10
   fs: 16000
   net_subsample: 4  # This param define the temporal resolution

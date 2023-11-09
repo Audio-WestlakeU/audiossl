@@ -5,10 +5,6 @@ import torch
 from .as_strong_utils.as_strong_dict import get_lab_dict
 from .dcase_utils import *
 
-
-# Gloable variables following official codes
-classes_labels = get_lab_dict()
-
 class TransformDataset(torch.utils.data.dataset.Dataset):
     def __init__(self, dataset, transform):
         super(TransformDataset, self).__init__()
