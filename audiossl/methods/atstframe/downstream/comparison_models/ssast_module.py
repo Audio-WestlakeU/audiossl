@@ -54,7 +54,7 @@ class SSASTPredModule(pl.LightningModule):
                                  input_fdim=128, input_tdim=998, model_size="base", pretrain_stage=False,
                                  load_pretrained_mdl_path=pretrained_ckpt_path)
         self.embed_dim = 768
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
         
     def forward(self, batch):
         (x, length), y = batch
@@ -92,7 +92,6 @@ class SSASTPredModule(pl.LightningModule):
                 p.requires_grad = True
         else:
             for n, p in self.named_parameters():
-                print(n)
                 p.requires_grad = True
 
     def finetune_mannual_train(self):

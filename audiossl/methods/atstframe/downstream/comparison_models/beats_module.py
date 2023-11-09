@@ -28,7 +28,7 @@ class BeatsPredModule(pl.LightningModule):
         self.feat_mean = nn.AvgPool1d(8, 8)
         self.embed_dim = 768
         self.opt_len = [len(self.encoder.encoder.layers) - (i + 1) for i in range(3)]
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
 
 
     def forward(self, batch):

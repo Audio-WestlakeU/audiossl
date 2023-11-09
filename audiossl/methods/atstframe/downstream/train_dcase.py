@@ -81,7 +81,6 @@ def run(args, pretrained_module):
             dcase_conf=args.dcase_conf,
             max_epochs=args.max_epochs,
             warmup_epochs=args.warmup_epochs,
-            n_last_blocks=args.unfreeze_last_n_blocks,
             freeze_mode=args.freeze_mode,
             )
 
@@ -167,10 +166,6 @@ def main():
     else:
         print("Finetune mode")
         pretrained_module.finetune_mode()
-        for n, p in pretrained_module.named_parameters():
-            if p.requires_grad:
-                print(n)
-        print("After finetune mode:", sum([p.requires_grad for p in pretrained_module.parameters()]))
     run(args, pretrained_module)
 
 

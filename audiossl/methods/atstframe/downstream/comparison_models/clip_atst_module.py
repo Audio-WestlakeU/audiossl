@@ -14,7 +14,7 @@ class ATSTPredModule(pl.LightningModule):
             load_pretrained_weights(self.encoder, pretrained_ckpt_path, checkpoint_key="teacher")
         self.embed_dim = self.encoder.embed_dim
         self.transform = FreezingTransform(max_len=10)
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch

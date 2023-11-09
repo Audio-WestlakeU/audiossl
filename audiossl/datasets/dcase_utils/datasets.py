@@ -184,7 +184,6 @@ class WeakSet(Dataset):
         random_channel=False,
         multisrc=False,
         feats_pipeline=None,
-        embeddings_hdf5_file=None,
         embedding_type=None,
 
     ):
@@ -241,21 +240,6 @@ class WeakSet(Dataset):
 
         if self.return_filename:
             out_args.append(c_ex["mixture"])
-
-        if self.embeddings_hdf5_file is not None:
-            name = Path(c_ex["mixture"]).stem
-            index = self.ex2emb_idx[name]
-
-            global_embeddings = torch.from_numpy(self.hdf5_file["global_embeddings"][index]).float()
-            frame_embeddings = torch.from_numpy(np.stack(self.hdf5_file["frame_embeddings"][index])).float()
-            if self.embedding_type == "global":
-                embeddings = global_embeddings
-            elif self.embedding_type == "frame":
-                embeddings = frame_embeddings
-            else:
-                raise NotImplementedError
-
-            out_args.append(embeddings)
 
 
         return out_args

@@ -62,7 +62,7 @@ def ASStrongDataset(as_strong_conf, split, transform=None, target_transform=None
         )
 
 
-        return [TransformDataset(strong_val, transform=transform)]
+        return TransformDataset(strong_val, transform=transform)
     
     else:
         # --------------------------[ Training set ]----------------------------

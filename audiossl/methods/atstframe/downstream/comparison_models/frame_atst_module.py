@@ -12,7 +12,7 @@ class FrameATSTPredModule(pl.LightningModule):
         self.encoder = get_frame_atst(pretrained_ckpt_path, **kwargs)
         self.embed_dim = self.encoder.embed_dim
         self.transform = FreezingTransform(max_len=10)
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch

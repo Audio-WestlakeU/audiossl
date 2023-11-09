@@ -43,8 +43,7 @@ class PatchMAEASTPredModule(pl.LightningModule):
         load_weigts = torch.load(pertrained_ckpt_path)
         state_dicts = load_weigts["model"]
         self.encoder.load_state_dict(state_dict=state_dicts, strict=True)
-        self.last_layer = dataset_name == "as_strong"
-        print("Using layer norm:", self.encoder.encoder.layer_norm_first)
+        self.last_layer = dataset_name != "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch
@@ -65,6 +64,13 @@ class PatchMAEASTPredModule(pl.LightningModule):
     
     def finetune_mode(self):
         if self.last_layer:
+            self.freeze()
+            # Unfreeze last tfm block
+            for i, layer in enumerate(self.encoder.encoder.layers):
+                if i == len(self.encoder.encoder.layers) - 1:
+                    for n, p in layer.named_parameters():
+                        p.requires_grad = True
+        else:
             for n, p in self.named_parameters():
                 if (".decoder" in n) or \
                 (".final_proj" in n) or \
@@ -73,13 +79,6 @@ class PatchMAEASTPredModule(pl.LightningModule):
                     p.requires_grad = False
                 else:
                     p.requires_grad = True
-        else:
-            self.freeze()
-            # Unfreeze last tfm block
-            for i, layer in enumerate(self.encoder.encoder.layers):
-                if i == len(self.encoder.encoder.layers) - 1:
-                    for n, p in layer.named_parameters():
-                        p.requires_grad = True
 
     def finetune_mannual_train(self):
         if self.last_layer:

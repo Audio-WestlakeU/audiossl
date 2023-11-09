@@ -2,6 +2,10 @@ training:
   batch_size: [128, 128]
   median_window: 7
   n_test_thresholds: 50
+  weak_split: 0.9
+  batch_len_index: 1
+  seed: 42
+  val_thresholds: [0.5]
 data:
   synth_train_num: 10000
   synth_folder: "/home/shaonian/Datasets/DCASE/dcase2021/dataset/audio/train/synthetic21_train/soundscapes_16k/"

@@ -51,7 +51,7 @@ class PatchSSASTPredModule(pl.LightningModule):
                                  input_fdim=128, input_tdim=998, model_size="base", pretrain_stage=False,
                                  load_pretrained_mdl_path=pretrained_ckpt_path)
         self.embed_dim = 768
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
         
     def forward(self, batch):
         (x, length), y = batch
@@ -78,12 +78,6 @@ class PatchSSASTPredModule(pl.LightningModule):
 
     def finetune_mode(self):
         if self.last_layer:
-            for n, p in self.named_parameters():
-                if (".v.head" in n) or (".mlp_head." in n):
-                    p.requires_grad = False
-                else:
-                    p.requires_grad = True
-        else:
             self.freeze()
             # Unfreeze last tfm block
             for i, layer in enumerate(self.encoder.v.blocks):
@@ -93,7 +87,12 @@ class PatchSSASTPredModule(pl.LightningModule):
             # Unfreeze last norm layer
             for n, p in self.encoder.v.norm.named_parameters():
                 p.requires_grad = True
-
+        else:
+            for n, p in self.named_parameters():
+                if (".v.head" in n) or (".mlp_head." in n):
+                    p.requires_grad = False
+                else:
+                    p.requires_grad = True
     def finetune_mannual_train(self):
         if self.last_layer:
             for i, layer in enumerate(self.encoder.v.blocks):
@@ -140,17 +139,3 @@ def calculate_stat(path_1, path_2):
     running_std = running_std
     return running_mean, running_std
 
-
-if __name__ == "__main__":
-    fake_wav = torch.rand([160000])
-    module = PatchSSASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/SSAST-Base-Patch-400.pth")
-    fake_fb, _ = module.transform(fake_wav)
-    fake_batch = fake_fb.unsqueeze(0).expand(10, -1, -1)
-    fake_output, _ = module(((fake_batch, 0), 0))
-    # print(module.encoder)
-    test_zeros = torch.zeros(1024).reshape(32, -1).unsqueeze(0).unsqueeze(0).float()
-    test_ones = torch.ones(1024).reshape(32, -1).unsqueeze(0).unsqueeze(0).float()
-    test_square = torch.concat([test_zeros, test_ones], dim=-1)
-
-    module.finetune_mode()
-    module.finetune_mannual_train()

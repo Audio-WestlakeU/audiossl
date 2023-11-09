@@ -66,7 +66,7 @@ class AudioMAEPredModule(pl.LightningModule):
         super().__init__()
         self.encoder = AudioMAEModel(pretrained_path)
         self.embed_dim = 768
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
         
     def forward(self, batch):
         (x, length), y = batch

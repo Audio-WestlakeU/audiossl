@@ -101,28 +101,16 @@ class DownstreamDataModule(LightningDataModule):
                 pin_memory=True
                 )
                             
-    def val_dataloader(self):        
-        if len(self.dataset_val) > 1:
-            sampler = self.dataset_val[1]["sampler"]
-            batch_sizes = self.dataset_val[1]["batch_size"]
-            return data.DataLoader(
-                self.dataset_val[0],
-                batch_size=batch_sizes,
-                num_workers=self.num_workers,
-                collate_fn=self.collate_fn,
-                pin_memory=True,
-                drop_last=False,
-                shuffle=False
-                )
-        else:
-            return data.DataLoader(self.dataset_val[0],
-                            batch_size=self.batch_size,
-                            num_workers=self.num_workers,
-                            shuffle=False,
-                            sampler=None,
-                            drop_last=False,
-                            collate_fn=self.collate_fn,
-                            pin_memory=True)
+    def val_dataloader(self):  
+        return data.DataLoader(self.dataset_val,
+                        batch_size=self.batch_size,
+                        num_workers=self.num_workers,
+                        shuffle=False,
+                        sampler=None,
+                        drop_last=False,
+                        collate_fn=self.collate_fn,
+                        pin_memory=True)
+    
     def test_dataloader(self):
         return data.DataLoader(
             self.dataset_test,

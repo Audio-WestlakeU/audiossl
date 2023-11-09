@@ -114,10 +114,10 @@ class FineTuningPLModule(LightningModule):
         )
         # for weak labels we simply compute f1 score
         self.get_weak_student_f1_seg_macro = tm.F1Score(
-            task="multilabel",
-            num_labels=len(self.pred_decoder.labels),
+            num_classes=len(self.pred_decoder.labels),
             average="macro",
             compute_on_step=False,
+            multiclass=True
         )
 
         # buffer for event based scores which we compute using sed-eval

@@ -18,7 +18,7 @@ class BYOLAPredModule(pl.LightningModule):
         self.embed_dim = 3072
         self.transform = DataTransform(cfg)
         self.unfreeze_ids = [0, 1, 2, 3, 4, 5, 6, 7]
-        self.last_layer = dataset_name == "as_strong" # this bool trigger not used for byola
+        self.last_layer = dataset_name != "as_strong" # this bool trigger not used for byola
 
     def forward(self, batch):
         (x, length), y = batch
@@ -26,7 +26,7 @@ class BYOLAPredModule(pl.LightningModule):
         return x, y
     
     def finetune_mode(self):
-        for n, p in self.parameters():
+        for n, p in self.named_parameters():
             p.requires_grad = True
 
 

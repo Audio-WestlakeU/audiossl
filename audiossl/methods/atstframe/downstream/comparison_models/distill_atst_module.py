@@ -62,7 +62,7 @@ class DistillATSTPredModule(pl.LightningModule):
         self.encoder = DistillATSTEncoder(distill_mode)
         self.embed_dim = self.encoder.embed_dim
         self.distill_mode = distill_mode
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
 
     def finetune_mode(self):
         if self.last_layer:

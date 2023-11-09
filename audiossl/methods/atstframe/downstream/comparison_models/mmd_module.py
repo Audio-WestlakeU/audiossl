@@ -44,7 +44,7 @@ class MMDPredModule(pl.LightningModule):
         self.encoder = MMDModel(weight_file=pretrained_path)
         self.embed_dim = 3840
         self.transform = DataTransform()
-        self.last_layer = dataset_name == "as_strong"
+        self.last_layer = dataset_name != "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch

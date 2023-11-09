@@ -44,8 +44,7 @@ class MAEASTPredModule(pl.LightningModule):
         state_dicts = load_weigts["model"]
         
         self.encoder.load_state_dict(state_dict=state_dicts, strict=True)
-        self.last_layer = dataset_name == "as_strong"
-        print("Using layer norm:", self.encoder.encoder.layer_norm_first)
+        self.last_layer = dataset_name != "as_strong"
 
     def forward(self, batch):
         (x, length), y = batch
@@ -83,18 +82,3 @@ class MAEASTPredModule(pl.LightningModule):
                     layer.train()
         else:
             self.encoder.train()
-
-if __name__ == "__main__":
-    module = MAEASTPredModule("/data/home/shaonian/ATST/audiossl/audiossl/methods/atst/downstream/utils_dcase/comparison_models/ckpts/random_frame_75_12LayerEncoder.pt")
-    model = MAEASTModel()
-    print(model)
-    fake_input = torch.rand(10, 998, 128)
-    fake_output, _ = model(fake_input)
-    
-    # test_zeros = torch.zeros(1024).reshape(32, -1).unsqueeze(0).unsqueeze(0).float()
-    # test_ones = torch.ones(1024).reshape(32, -1).unsqueeze(0).unsqueeze(0).float()
-    # test_square = torch.concat([test_zeros, test_ones], dim=-1)
-    # print(test_square)
-    # unfold_square = model.encoder.unfold(test_square)
-    # print(unfold_square)
-    print(fake_output.shape)
