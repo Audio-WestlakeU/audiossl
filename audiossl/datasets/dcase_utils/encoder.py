@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
+import torch.nn.functional as F
+import torch
 from dcase_util.data import DecisionEncoder
-
+from pathlib import Path
 
 class ManyHotEncoder:
     """"
@@ -191,6 +193,65 @@ class ManyHotEncoder:
                     ]
                 )
         return result_labels
+
+    def gpu_decode_strong(self, labels, thds, filenames, output_type="pandas"):
+        # decode strong predictions by gpu
+        # labels: [Thds, Bsz, Cls, Time]
+        assert len(thds) == labels.shape[0], "Label thresholds and provided thresholds not match"
+        # get onset/offset
+        padded_labels = F.pad(labels, (1, 1, 0, 0), value=0, mode="constant")
+        onset_mat = labels - padded_labels[:, :, :, :-2]
+        offset_mat = labels - padded_labels[:, :, :, 2:]
+        onset_mat = onset_mat.reshape(-1, onset_mat.shape[-1]) # [Thds * Bsz * Cls, Time]
+        offset_mat = offset_mat.reshape(-1, offset_mat.shape[-1])
+        # Mask silent frames
+        onset_offset_mask = onset_mat.abs().sum(-1) > 0
+        onset_mat = onset_mat[onset_offset_mask]
+        offset_mat = offset_mat[onset_offset_mask]
+        onset_index = torch.argwhere(onset_mat == 1)
+        offset_index = torch.argwhere(offset_mat == 1)
+        assert torch.equal(onset_index[:, 0], offset_index[:, 0]), "onset/offset detect mismatch, need debug"
+        if output_type == "pandas":
+            # Create thd-filename-cls list (according to reshape order)
+            thd_filename_cls = []
+            str_filenames = [Path(x).stem + ".wav" for x in filenames]
+            str_thds = [str(thd) for thd in thds]
+            for thd in str_thds:
+                for filename in str_filenames:
+                    for c in self.labels:
+                        thd_filename_cls.append(thd + " " + filename + " " + c)
+            thd_filename_cls = np.array(thd_filename_cls)
+            thd_filename_cls = thd_filename_cls[onset_offset_mask.cpu().numpy()]
+            event_index = onset_index[:, 0]
+            onset_timestamps = onset_index[:, 1] * self.net_pooling / (self.fs / self.frame_hop)
+            offset_timestamps = (offset_index[:, 1] + 1) * self.net_pooling / (self.fs / self.frame_hop)     # plus one to meet original ManyHotEncoder setups
+            thd_filename_cls = thd_filename_cls[event_index.cpu().numpy()]
+            thds_all = [float(x.split(" ")[0]) for x in thd_filename_cls]
+            filename_all = [x.split(" ")[1] for x in thd_filename_cls]
+            cls_all = [x.split(" ")[2] for x in thd_filename_cls]
+            onset_timestamps = onset_timestamps.cpu().numpy()
+            offset_timestamps = offset_timestamps.cpu().numpy()
+            # Creat pandas dataframe
+            df = pd.DataFrame(
+                {
+                    "thd": thds_all,
+                    "filename": filename_all,
+                    "event_label": cls_all,
+                    "onset": onset_timestamps,
+                    "offset": offset_timestamps,
+                }
+            )
+            
+            return_dict = {k: g.iloc[:, 1:] for k, g in df.groupby(["thd"])}
+            # Recheck thresholds
+            empty_thds = [thd for thd in thds if thd not in return_dict.keys()]
+            for t in empty_thds:
+                return_dict[t] = pd.DataFrame([], columns=["filename", "event_label", "onset", "offset"])
+            return return_dict
+        elif output_type == "tensor":
+            raise NotImplementedError
+
+        pass
 
     def state_dict(self):
         return {
