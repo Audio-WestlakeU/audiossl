@@ -84,7 +84,7 @@ Click to download
 
 - Train a base model (using 6 GPUs)
     ```
-    CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python train.py --arch small \ 
+    CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python train.py --arch base \ 
     --data_path YOUR_DATA_PATH  \
     --save_path YOUR_MODEL_SAVE_PATH \ 
     --nproc 6 --batch_size_per_gpu 144 --warmup_steps 19900 \
