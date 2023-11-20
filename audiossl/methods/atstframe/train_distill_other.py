@@ -17,13 +17,13 @@ import os
 
 
 
-def get_pretraied_encoder2(args):
+def get_pretraied_encoder_frame(args):
     # get pretrained encoder
     dict_args = vars(args)
 
-    s = torch.load(args.pretrained_ckpt_path2,map_location="cpu")
+    s = torch.load(args.pretrained_ckpt_path_frame,map_location="cpu")
     pretrained_model = FrameATSTLightningModule.load_from_checkpoint(
-        args.pretrained_ckpt_path2)
+        args.pretrained_ckpt_path_frame)
 
     pretrained_encoder = pretrained_model.model.teacher.encoder
     pretrained_encoder.hyper_param = s['hyper_parameters']
@@ -36,8 +36,8 @@ if __name__ == "__main__":
     parser = ArgumentParser("LinearClassifier")
     from audiossl.utils.common import bool_flag
     #parser = Trainer.add_argparse_args(parser)
-    parser.add_argument("--pretrained_ckpt_path", type=str)
-    parser.add_argument("--pretrained_ckpt_path2", type=str)
+    parser.add_argument("--pretrained_ckpt_path_clip", type=str)
+    parser.add_argument("--pretrained_ckpt_path_frame", type=str)
     parser.add_argument("--alpha", type=float,default=0.5)
     parser.add_argument("--mixup_training", type=bool_flag,default=False)
     parser.add_argument("--save_path", type=str)
@@ -65,9 +65,8 @@ if __name__ == "__main__":
                             transforms=[train_transform,eval_transform,eval_transform],
                             target_transforms=[target_transform,None,None])
     #load model
-    #cls_encoder = get_pretraied_encoder(args)
-    cls_s = torch.load(args.pretrained_ckpt_path,map_location="cpu")
-    frame_encoder = get_pretraied_encoder2(args)
+    cls_s = torch.load(args.pretrained_ckpt_path_clip,map_location="cpu")
+    frame_encoder = get_pretraied_encoder_frame(args)
 
     model = DistillLightningModule(
                                     multi_label=data.multi_label,
