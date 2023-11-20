@@ -22,27 +22,33 @@ Click to download
 
     See [../atst/docs/data_prep.md](../atst/docs/data_prep.md)
 
-- Linear evaluation
+- Clip-level downstream tasks
+    - Linear evaluation
 
-    1. go to shell/downstream/freeze
+        1. go to shell/downstream/freeze
 
-    2. modify data path in eval_{task}.sh 
+        2. modify data path in eval_{task}.sh 
 
-    3. modify enviroment in eval_env.sh 
+        3. modify enviroment in eval_env.sh 
 
-    4. run eval_batch.sh ${checkpoint_file_path}
+        4. run eval_batch.sh ${checkpoint_file_path}
 
 
 
-- Finetuning
+    - Finetuning
 
-    1. go to shell/downstream/finetune
+        1. go to shell/downstream/finetune
 
-    2. modify data path in eval_{task}.sh 
+        2. modify data path in eval_{task}.sh 
 
-    3. modify enviroment in eval_env.sh
+        3. modify enviroment in eval_env.sh
 
-    4. run eval_batch.sh ${checkpoint_file_path}
+        4. run eval_batch.sh ${checkpoint_file_path}
+- Frame-level downstream tasks
+    - DESED
+        - please see sehll/downstream/finetune_dcase
+    - Strongly labelled AudioSet
+        - please see shell/downstream/finetune_as_strong
 
 ## Train ATST-Frame
 
@@ -108,6 +114,8 @@ Click to download
 
 Besides ATST-Clip and ATST-Frame, this work also proposes a method to combine ATST-Clip and ATST-Frame through distilling knowleadge from fintuned ATST-Clip to ATST-Frame. First, finetune ATST-Clip on a downstream task; Second, fintune ATST-Frame on the same downstream task using a multi-task loss: ground truth loss + distilation loss.
 
+
+
 The code nees some cleaning up.  coming soon.
 - AS-2M
     ```
@@ -116,4 +124,20 @@ The code nees some cleaning up.  coming soon.
 - Other downstream tasks
     ```
     python train_distill_other.py
+    ```
+    Take Voxcelb1 dataset for example:
+    ```
+    python train_distill_other.py \
+    --batch_size_per_gpu 128 \
+    --dataset_name voxceleb1 \
+    --data_path DATA_PATH_Of_voxceleb1
+    --pretrained_ckpt_path_clip Fintuned_CKPT_PATH_ATST_Clip_voxceleb1 \
+    --pretrained_ckpt_path_frame Pretrained_CKPT_PATH_ATST_Frame \
+    --learning_rate 1e-2 \
+    --max_epochs 50 \
+    --warmup_epochs 5 \
+    --mixup_training True \
+    --alpha 0.5 \
+    --nproc 4 \
+    --save_path YOUR_MODEL_SAVE_PATH
     ```
