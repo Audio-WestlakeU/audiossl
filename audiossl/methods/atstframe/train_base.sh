@@ -18,7 +18,7 @@ batch_size=144
 symmetric=True
 aug_tea=False #
 aug_stu=True
-arch=small
+arch=base
 mask_ratio=0.65
 mask_type="block"
 anchor_len=10
@@ -31,7 +31,7 @@ save_path=${arg_save_path}/$name
 ###################
 mkdir -p $save_path
 
-echo  CUDA_VISIBLE_DEVICES=$devices  python train.py \
+ CUDA_VISIBLE_DEVICES=$devices  python train.py \
 		    --arch $arch \
                     --data_path $data_path  \
                     --save_path $save_path  \
@@ -51,5 +51,5 @@ echo  CUDA_VISIBLE_DEVICES=$devices  python train.py \
 		    --n_mels $n_mels \
 		    --anchor_len $anchor_len \
 		    --aug_tea $aug_tea \
-		    --aug_stu $aug_stu #> $save_path/log.txt
+		    --aug_stu $aug_stu > $save_path/log.txt
 
