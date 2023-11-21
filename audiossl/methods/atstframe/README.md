@@ -116,7 +116,6 @@ Besides ATST-Clip and ATST-Frame, this work also proposes a method to combine AT
 
 
 
-The code nees some cleaning up.  coming soon.
 - AS-2M
     ```
     python train_distill.py
@@ -141,3 +140,4 @@ The code nees some cleaning up.  coming soon.
     --nproc 4 \
     --save_path YOUR_MODEL_SAVE_PATH
     ```
+Fintuned_CKPT_PATH_ATST_Clip_voxceleb1 is the checkpoint of the model ATST-Clip fintuned on voxceleb1
