@@ -124,7 +124,7 @@ Besides ATST-Clip and ATST-Frame, this work also proposes a method to combine AT
     ```
     python train_distill_other.py
     ```
-    Take Voxcelb1 dataset for example:
+    Take Voxceleb1 dataset for example:
     ```
     python train_distill_other.py \
     --batch_size_per_gpu 128 \
