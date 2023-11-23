@@ -16,6 +16,52 @@ Click to download
 
     - [atstframe_base](https://drive.google.com/file/d/1bGJSZWlAIIJ6GL5Id5dW0PTB72DL-QDQ/view?usp=sharing)
 
+## Embedding Extraction
+
+```python
+from audiossl.methods.atstframe.embedding import load_model,get_scene_embedding,get_timestamp_embedding
+
+model = load_model("CHECKPONT_PATH")
+
+audio = torch.randn(1,20000) # Input audio can be of shape [1,N] or [B,1,N]
+
+"""
+extract scene (clip-level) embedding from an audio clip
+=======================================
+args:
+    audio: torch.tensor in the shape of [1,N] or [B,1,N] 
+    model: the pretrained encoder returned by load_model 
+return:
+    emb: retured embedding in the shape of [1,N_BLOCKS*emb_size] or [B,1,N_BLOCKS*emb_size], where emb_size is 768 for base model and 384 for small model.
+
+"""
+emb_scene = get_scene_embedding(audio,model)
+
+"""
+Extract frame-level embeddings from an audio clip 
+==================================================
+args:
+    audio: torch.tensor in the shape of [1,N] or [B,1,N] 
+    model: the pretrained encoder returned by load_model 
+return:
+    emb: retured embedding in the shape of [1,T,N_BLOCKS*emb_size] or [B,1,T,N_BLOCKS,emb_size], where emb_size is 768 for base model and 384 for small model, and T is number of (40ms) frames.
+    timestamps: timestamps in miliseconds
+"""
+emb_timestamp,t = get_timestamp_embedding(audio,model)
+
+
+"""
+By default, embeddings of 12 blocks are concatenated.
+
+You can change N_BLOCKS 
+
+from audiossl.methods.atstframe.embedding
+embdding.N_BLOCKS=1
+
+"""
+```
+
+
 ## Train Downstream Tasks
 
 - Data prepare
@@ -58,12 +104,12 @@ Click to download
 
 - Help documentation of train.py is useful to figure out the specific meaning of each argument
 
-    ```
+    ```bash
     python train.py --help
 
     ```
 - Train a small model (using 4 GPUs)
-    ```
+    ```bash
     CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --arch small \
     --data_path YOUR_DATA_OATH  \
     --save_path  YOUR_MODEL_SAVE_PATH \
@@ -89,7 +135,7 @@ Click to download
 
 
 - Train a base model (using 6 GPUs)
-    ```
+    ```bash
     CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python train.py --arch base \ 
     --data_path YOUR_DATA_PATH  \
     --save_path YOUR_MODEL_SAVE_PATH \ 
@@ -125,7 +171,7 @@ Besides ATST-Clip and ATST-Frame, this work also proposes a method to combine AT
     python train_distill_other.py
     ```
     Take Voxceleb1 dataset for example:
-    ```
+    ```bash
     python train_distill_other.py \
     --batch_size_per_gpu 128 \
     --dataset_name voxceleb1 \
