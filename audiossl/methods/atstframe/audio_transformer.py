@@ -276,7 +276,7 @@ class FrameAST(nn.Module):
                     if self.nprompt>0:
                         output.append(torch.mean(x[:,:self.nprompt],dim=1))
                 else:
-                    output.append(norm_x(x[:,self.nprompt:]))
+                    output.append(norm_x[:,self.nprompt:])
 
         return torch.cat(output,dim=-1)
 

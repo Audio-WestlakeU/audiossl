@@ -2,7 +2,7 @@ data_path=$1
 arg_save_path=$2
 reinit_path=$3
 nproc=7
-devices=0,1,2,3,4,5,6
+devices=7,1,2,3,4,5,6
 
 
 
