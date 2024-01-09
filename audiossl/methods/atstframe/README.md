@@ -1,7 +1,7 @@
 # ATST-Frame
 
 Official implemetation of ["Self-supervised Audio Teacher-Student Transformer
-for Both Clip-level and Frame-level Tasks"](https://arxiv.org/abs/2306.04186), which is currently under review at IEEE Transactions on Audio, Speech and Language Processing.
+for Both Clip-level and Frame-level Tasks"](https://arxiv.org/abs/2306.04186), which is accepted by IEEE Transactions on Audio, Speech and Language Processing.
 
 This work proposes two methods: ATST-Clip and ATST-Frame. Implementation of ATST-Frame is in this directory. For ATST-Clip, please goto [../atst](../atst).
 
@@ -32,7 +32,7 @@ args:
     audio: torch.tensor in the shape of [1,N] or [B,1,N] 
     model: the pretrained encoder returned by load_model 
 return:
-    emb: retured embedding in the shape of [1,N_BLOCKS*emb_size] or [B,1,N_BLOCKS*emb_size], where emb_size is 768 for base model and 384 for small model.
+    emb: retured embedding in the shape of [1,N_BLOCKS*emb_size] or [B,N_BLOCKS*emb_size], where emb_size is 768 for base model and 384 for small model.
 
 """
 emb_scene = get_scene_embedding(audio,model)
@@ -44,7 +44,7 @@ args:
     audio: torch.tensor in the shape of [1,N] or [B,1,N] 
     model: the pretrained encoder returned by load_model 
 return:
-    emb: retured embedding in the shape of [1,T,N_BLOCKS*emb_size] or [B,1,T,N_BLOCKS,emb_size], where emb_size is 768 for base model and 384 for small model, and T is number of (40ms) frames.
+    emb: retured embedding in the shape of [1,T,N_BLOCKS*emb_size] or [B,T,N_BLOCKS,emb_size], where emb_size is 768 for base model and 384 for small model, and T is number of (40ms) frames.
     timestamps: timestamps in miliseconds
 """
 emb_timestamp,t = get_timestamp_embedding(audio,model)

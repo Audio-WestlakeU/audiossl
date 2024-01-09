@@ -7,12 +7,12 @@ Audiossl is developed as we implement our own audio self-supervised learning met
 
 Two official implemented audio self-supervised methods are included:
 
-1. [ATST: Audio Representation Learning with Teacher-Student Transformer(INTERSPEECH2022)](https://arxiv.org/abs/2204.12076)
+1. [ATST: Audio Representation Learning with Teacher-Student Transformer](https://arxiv.org/abs/2204.12076) (Published at (INTERSPEECH2022))
 
     See [audiossl/methods/atst](audiossl/methods/atst)
 
 2. [Self-supervised Audio Teacher-Student Transformer
-for Both Clip-level and Frame-level Tasks(Under Review at TASLP)](https://arxiv.org/abs/2306.04186)
+for Both Clip-level and Frame-level Tasks](https://arxiv.org/abs/2306.04186) (Accepted by TASLP)
 
     See [audiossl/methods/atstframe](audiossl/methods/atstframe)
 

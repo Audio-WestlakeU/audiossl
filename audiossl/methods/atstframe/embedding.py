@@ -46,7 +46,7 @@ def get_scene_embedding(audio,model):
         audio: torch.tensor in the shape of [1,N] or [B,1,N] 
         model: the pretrained encoder returned by load_model 
     return:
-        emb: retured embedding in the shape of [1,N_BLOCKS*emb_size] or [B,1,N_BLOCKS*emb_size], where emb_size is 768 for base model and 384 for small model.
+        emb: retured embedding in the shape of [1,N_BLOCKS*emb_size] or [B,N_BLOCKS*emb_size], where emb_size is 768 for base model and 384 for small model.
 
     """
     if len(audio.shape)==2: 
@@ -90,7 +90,7 @@ def get_timestamp_embedding(audio,model):
         audio: torch.tensor in the shape of [1,N] or [B,1,N] 
         model: the pretrained encoder returned by load_model 
     return:
-        emb: retured embedding in the shape of [1,T,N_BLOCKS*emb_size] or [B,1,T,N_BLOCKS,emb_size], where emb_size is 768 for base model and 384 for small model.
+        emb: retured embedding in the shape of [1,T,N_BLOCKS*emb_size] or [B,T,N_BLOCKS,emb_size], where emb_size is 768 for base model and 384 for small model.
         timestamps: timestamps in miliseconds
     """
     if len(audio.shape)==2: 
