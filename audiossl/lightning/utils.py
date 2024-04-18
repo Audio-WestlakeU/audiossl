@@ -14,7 +14,8 @@ class EmbeddingExtractor:
                             strategy="ddp_find_unused_parameters_false",
                             sync_batchnorm=True,
                             logger=False,
-                            gpus=nproc,
+                            accelerator="gpu",
+                            devices=nproc,
                             #profiler="simple",
                             #max_epochs=1,
                             )

@@ -17,7 +17,6 @@ from audiossl.methods.atst.downstream.transform import \
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning.profiler import SimpleProfiler
 
 
 
@@ -126,7 +125,8 @@ def run(args, pretrained_module, fold=None):
     trainer: Trainer = Trainer(
         strategy="ddp",
         sync_batchnorm=True,
-        gpus=args.nproc,
+        accelerator="gpu",
+        devices=args.nproc,
         max_epochs=args.max_epochs,
         logger=logger_tb,  # ,logger_wb],
         callbacks=[

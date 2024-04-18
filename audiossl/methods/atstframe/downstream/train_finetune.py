@@ -17,7 +17,6 @@ from audiossl.methods.atstframe.downstream.transform import \
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning.profiler import SimpleProfiler
 from copy import deepcopy
 import numpy as np
 
@@ -123,13 +122,14 @@ def run(args, pretrained_module, fold=None):
                               save_top_k=10 if "audioset" in args.dataset_name else 1,
                               )
     trainer: Trainer = Trainer(
-        strategy="ddp",
+        strategy="ddp_find_unused_parameters_true",
         sync_batchnorm=True,
-        gpus=args.nproc,
+        accelerator="gpu",
+        devices=args.nproc,
         gradient_clip_val=3.0,
         max_epochs=args.max_epochs,
         logger=logger_tb,  # ,logger_wb],
-        replace_sampler_ddp=False if args.dataset_name == "audioset" else True,
+        use_distributed_sampler=False if args.dataset_name == "audioset" else True,
         check_val_every_n_epoch=1,
         #val_check_interval=1 if args.dataset_name == "audioset" else 1.0,
         callbacks=[

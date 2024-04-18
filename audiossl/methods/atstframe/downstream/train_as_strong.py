@@ -96,7 +96,7 @@ def run(args, pretrained_module):
         flush_logs_every_n_steps=10,
         sync_batchnorm=False,
         accelerator="gpu",
-        gpus=args.nproc,
+        devices=args.nproc,
         gradient_clip_val=3.0,
         max_epochs=args.max_epochs,
         logger=logger_tb,  # ,logger_wb],

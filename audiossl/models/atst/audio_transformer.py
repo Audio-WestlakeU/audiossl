@@ -111,8 +111,6 @@ class AST(nn.Module):
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
         self.norm = norm_layer(embed_dim)
-        if self.mask_ratio > 0:
-            self.final_to_melsp = nn.Linear(embed_dim,patch_h*patch_w)
 
 
         trunc_normal_(self.pos_embed, std=.02)
@@ -204,18 +202,6 @@ class AST(nn.Module):
         if avg:
             avg_x=torch.mean(torch.stack(avg_x),dim=0)
 
-        if self.mask_ratio>0:
-            if patch_length is not None:
-                length_mask = torch.arange(mel_patches.shape[1]).to(x.device) < patch_length.unsqueeze(1)
-                length_mask = length_mask.to(x.device)
-                mask = mask_index & length_mask
-            else:
-                mask = mask_index
-                
-            logits = self.final_to_melsp(x[:,1:][mask])
-            mse_loss = F.mse_loss(logits,mel_patches[mask])
-        else:
-            mse_loss = torch.zeros([])
         
         if self.use_cls:
             if avg:

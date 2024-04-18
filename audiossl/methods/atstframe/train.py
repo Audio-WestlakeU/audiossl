@@ -3,7 +3,6 @@ from model import FrameATSTLightningModule
 from data import FrameATSTDataModule
 from pytorch_lightning.callbacks import LearningRateMonitor,ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger,WandbLogger
-from pytorch_lightning.utilities.cli import LightningCLI
 from argparse import ArgumentParser
 import os
 import torch
@@ -22,9 +21,9 @@ def main(args):
     trainer:Trainer = Trainer(
                             strategy="ddp",
                             sync_batchnorm=True,
-                            gpus=args.nproc,
+                            accelerator="gpu",
+                            devices=args.nproc,
                             #precision=16,
-                            #amp_backend='native',
                             max_steps=args.max_steps,
                             logger=[logger_tb],#,logger_wb],
                             callbacks=[ModelCheckpoint(dirpath=args.save_path,

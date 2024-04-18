@@ -3,7 +3,6 @@ from model import ATSTLightningModule
 from data import ATSTDataModule
 from pytorch_lightning.callbacks import LearningRateMonitor,ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger,WandbLogger
-from pytorch_lightning.utilities.cli import LightningCLI
 from argparse import ArgumentParser
 import os
 
@@ -17,9 +16,10 @@ def main(args):
     model = ATSTLightningModule(**dict_args)
     data = ATSTDataModule(**dict_args)
     trainer:Trainer = Trainer(
-                            strategy="ddp",
+                            strategy="ddp_find_unused_parameters_true",
                             sync_batchnorm=True,
-                            gpus=args.nproc,
+                            accelerator="gpu",
+                            devices=args.nproc,
                             max_steps=args.max_steps,
                             logger=[logger_tb],#,logger_wb],
                             callbacks=[ModelCheckpoint(dirpath=args.save_path,
