@@ -19,7 +19,7 @@ for Both Clip-level and Frame-level Tasks](https://arxiv.org/abs/2306.04186) (Ac
 ## Install
 ------------------------
 
-1. install pytorch ( version 1.12.1 or higher )
+1. install pytorch ( version 2.1.1 or higher )
 
 
 ```
