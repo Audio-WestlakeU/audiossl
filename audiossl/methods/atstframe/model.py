@@ -119,15 +119,15 @@ class FrameATSTLightningModule(LightningModule):
         self.schedule()
         (melspecs,lengths,masks),_ = batch
         total_loss_frm,std_frm_stu,std_frm_tea= self.model(melspecs,lengths,masks)
-        loss = total_loss_frm
-        self.log("loss",loss,prog_bar=True,logger=True)
-        self.log("loss_frm",total_loss_frm,prog_bar=True,logger=True)
-        self.log("std_frm_tea",std_frm_tea,prog_bar=True,logger=True)
-        self.log("std_frm_stu",std_frm_stu,prog_bar=True,logger=True)
-        self.log("ema",self.ema_scheduler[self.global_step],prog_bar=True,logger=True)
-        self.log("step",self.global_step,prog_bar=True,logger=True)
+        #loss = total_loss_frm
+        #self.log("loss",loss,prog_bar=True,logger=True)
+        self.log("loss_frm",total_loss_frm,on_step=True,on_epoch=True,logger=True)
+        self.log("std_frm_tea",std_frm_tea,on_step=True,on_epoch=True,logger=True)
+        self.log("std_frm_stu",std_frm_stu,on_step=True,on_epoch=True,logger=True)
+        self.log("ema",self.ema_scheduler[self.global_step],logger=True)
+        self.log("step",self.global_step,on_epoch=True,logger=True)
         
-        return loss
+        return total_loss_frm
     def schedule(self):
         for i, param_group in enumerate(self.trainer.optimizers[0].param_groups):
             param_group["lr"] = self.mylr_scheduler[self.global_step]

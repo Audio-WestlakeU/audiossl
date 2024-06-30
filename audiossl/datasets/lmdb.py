@@ -1,6 +1,5 @@
 import lmdb
-import pyarrow as pa
-from torch.nn import Module
+import pickle5
 import torch.utils.data as data
 import os
 import torch
@@ -10,25 +9,26 @@ random.seed(1234)
 from copy import deepcopy
 
 class LMDBDataset(data.Dataset):
-    def __init__(self, db_path,split, subset=None, transform=None, target_transform=None, return_key = False):
+    def __init__(self, db_path,split, db_path_should_join = True, subset=None, transform=None, target_transform=None, return_key = False):
         self.db_path = db_path
         self.return_key = return_key
-        lmdb_path = None
-        if split=="train":
-            lmdb_path = os.path.join(self.db_path,"train.lmdb")
-        elif split=="valid":
-            lmdb_path = os.path.join(self.db_path,"valid.lmdb")
+        if db_path_should_join:
+            if split == "train":
+                lmdb_path = os.path.join(self.db_path, "train.lmdb")
+            elif split == "valid":
+                lmdb_path = os.path.join(self.db_path, "valid.lmdb")
+            else:
+                lmdb_path = os.path.join(self.db_path, "eval.lmdb")
         else:
-            lmdb_path = os.path.join(self.db_path,"eval.lmdb")
+            lmdb_path = db_path
         self.subset = subset
         self.env = lmdb.open(lmdb_path, subdir=os.path.isdir(lmdb_path),
                              readonly=True, lock=False,
                              readahead=False, meminit=False)
         with self.env.begin(write=False) as txn:
-            # self.length = txn.stat()['entries'] - 1
-            
-            self.length =pa.deserialize(txn.get(b'__len__'))
-            self.keys= pa.deserialize(txn.get(b'__keys__'))
+
+            self.length =pickle5.loads(txn.get(b'__len__'))
+            self.keys= pickle5.loads(txn.get(b'__keys__'))
             self.org_keys = deepcopy(self.keys)
             self.start = 0
             if subset is not None and subset < self.length:
@@ -42,7 +42,7 @@ class LMDBDataset(data.Dataset):
         self.target_transform = target_transform
         with self.env.begin(write=False) as txn:
             byteflow = txn.get(self.keys[0])
-        unpacked = pa.deserialize(byteflow)
+        unpacked = pickle5.loads(byteflow)
         self.num_classes = unpacked[1].shape[1]
         self.txn = self.env.begin(write=False)
 
@@ -52,7 +52,7 @@ class LMDBDataset(data.Dataset):
         env = self.env
         key = self.keys[index]
         byteflow = self.txn.get(self.keys[index])
-        unpacked = pa.deserialize(byteflow)
+        unpacked = pickle5.loads(byteflow)
 
         waveform, label = torch.from_numpy(unpacked[0]).squeeze(0),torch.from_numpy(unpacked[1]).squeeze(0)
         length = waveform.shape[-1]

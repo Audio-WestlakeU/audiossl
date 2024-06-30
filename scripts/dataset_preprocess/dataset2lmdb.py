@@ -7,20 +7,22 @@ import os.path as osp
 import lmdb
 import tqdm
 import pyarrow as pa
+import pickle5
+from tqdm import tqdm
 
 import torch.utils.data as data
 from torch.utils.data import DataLoader
 import dataset
-import numpy as np
 
-def dumps_pyarrow(obj):
+def dumps_pickle5(obj):
     """
     Serialize an object.
 
     Returns:
         Implementation-dependent bytes-like object
     """
-    return pa.serialize(obj).to_buffer()
+    #return pa.serialize(obj).to_buffer()
+    return pickle5.dumps(obj, protocol=5)
 
 def dataset2lmdb(dataset, save_prefix, write_frequency=5000, max_num=400000, num_workers=16):
 
@@ -48,13 +50,13 @@ def dataset2lmdb(dataset, save_prefix, write_frequency=5000, max_num=400000, num
     for idx, data in enumerate(dataloader):
         image, label, name = data[0].numpy(),data[1].numpy(),data[2][0]
         keys.append(u'{}'.format(name).encode('ascii'))
-        txn.put(u'{}'.format(name).encode('ascii'), dumps_pyarrow((image, label)))
+        txn.put(u'{}'.format(name).encode('ascii'), dumps_pickle5((image, label)))
         if idx >0 and idx % max_num ==0:
 
             txn.commit()
             with db.begin(write=True) as txn:
-                txn.put(b'__keys__', dumps_pyarrow(keys))
-                txn.put(b'__len__', dumps_pyarrow(len(keys)))
+                txn.put(b'__keys__', dumps_pickle5(keys))
+                txn.put(b'__len__', dumps_pickle5(len(keys)))
             print("Flushing database to {} ...".format(lmdb_path))
             db.sync()
             db.close()
@@ -64,7 +66,7 @@ def dataset2lmdb(dataset, save_prefix, write_frequency=5000, max_num=400000, num
             isdir = os.path.isdir(lmdb_path)
 
             db = lmdb.open(lmdb_path, subdir=isdir,
-                        map_size=1099511627776 // 18, readonly=False,
+                        map_size=1099511627776 // 4, readonly=False,
                         meminit=False, map_async=True)
 
             txn = db.begin(write=True)
@@ -76,31 +78,31 @@ def dataset2lmdb(dataset, save_prefix, write_frequency=5000, max_num=400000, num
             txn = db.begin(write=True)
     txn.commit()
     with db.begin(write=True) as txn:
-        txn.put(b'__keys__', dumps_pyarrow(keys))
-        txn.put(b'__len__', dumps_pyarrow(len(keys)))
+        txn.put(b'__keys__', dumps_pickle5(keys))
+        txn.put(b'__len__', dumps_pickle5(len(keys)))
 
     print("Flushing database ...")
     db.sync()
     db.close()
 
-def folder2lmdb(dpath, split="train",lmdb_path=None, write_frequency=5000, max_num=200000, num_workers=5):
+def folder2lmdb(dpath, split="train",lmdb_dir=None, write_frequency=5000, max_num=200000, num_workers=5):
 
-    if lmdb_path is None:
-        lmdb_path=dpath
+    if lmdb_dir is None:
+        lmdb_dir=dpath
     ds = dataset.FSD50KDataset3(dpath,split=split)
-    dataloader = DataLoader(ds,num_workers=num_workers,shuffle=True)
-    i = iter(ds)
+    #dataloader = DataLoader(ds,num_workers=num_workers,shuffle=True)
+    #i = iter(ds)
 
 
     if len(ds) > max_num:
         lmdb_split = 0
-        lmdb_path = osp.join(lmdb_path, "{}_{}.lmdb".format(split,lmdb_split))
+        lmdb_path = osp.join(lmdb_dir, "{}_{}.lmdb".format(split,lmdb_split))
         lmdb_split += 1
     else:
-        lmdb_path = osp.join(lmdb_path, "{}.lmdb".format(split))
+        lmdb_path = osp.join(lmdb_dir, "{}.lmdb".format(split))
 
     if os.path.exists(lmdb_path):
-        print("{} already exists".format(lmdb_path))
+        print("{} already exists, overwriting it.".format(lmdb_path))
         exit(0)
     isdir = os.path.isdir(lmdb_path)
 
@@ -110,26 +112,26 @@ def folder2lmdb(dpath, split="train",lmdb_path=None, write_frequency=5000, max_n
 
     txn = db.begin(write=True)
     keys = []
-    for idx, data in enumerate(ds):
+    for idx, data in tqdm(enumerate(ds)):
         image, label, name = data[0].unsqueeze(0).numpy(),data[1].unsqueeze(0).numpy(),data[2]
         keys.append(u'{}'.format(name).encode('ascii'))
-        txn.put(u'{}'.format(name).encode('ascii'), dumps_pyarrow((image, label)))
+        txn.put(u'{}'.format(name).encode('ascii'), dumps_pickle5((image, label)))
         if idx >0 and idx % max_num ==0:
 
             txn.commit()
             with db.begin(write=True) as txn:
-                txn.put(b'__keys__', dumps_pyarrow(keys))
-                txn.put(b'__len__', dumps_pyarrow(len(keys)))
+                txn.put(b'__keys__', dumps_pickle5(keys))
+                txn.put(b'__len__', dumps_pickle5(len(keys)))
             print("Flushing database to {} ...".format(lmdb_path))
             db.sync()
             db.close()
 
-            lmdb_path = osp.join(lmdb_path, "{}_{}.lmdb".format(split,lmdb_split))
+            lmdb_path = osp.join(lmdb_dir, "{}_{}.lmdb".format(split,lmdb_split))
             lmdb_split += 1
             isdir = os.path.isdir(lmdb_path)
 
             db = lmdb.open(lmdb_path, subdir=isdir,
-                        map_size=1099511627776 // 18, readonly=False,
+                        map_size=1099511627776 // 4, readonly=False,
                         meminit=False, map_async=True)
 
             txn = db.begin(write=True)
@@ -141,8 +143,8 @@ def folder2lmdb(dpath, split="train",lmdb_path=None, write_frequency=5000, max_n
             txn = db.begin(write=True)
     txn.commit()
     with db.begin(write=True) as txn:
-        txn.put(b'__keys__', dumps_pyarrow(keys))
-        txn.put(b'__len__', dumps_pyarrow(len(keys)))
+        txn.put(b'__keys__', dumps_pickle5(keys))
+        txn.put(b'__len__', dumps_pickle5(len(keys)))
 
     print("Flushing database ...")
     db.sync()

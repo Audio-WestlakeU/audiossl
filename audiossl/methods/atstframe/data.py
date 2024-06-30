@@ -3,6 +3,8 @@ from torch.utils import data
 from audiossl.datasets import LMDBDataset
 from transform import FrameATSTTrainTransform
 import argparse
+import os
+from torch.utils.data import ConcatDataset
 def bool_flag(s):
     """
     Parse boolean arguments from the command line.
@@ -19,7 +21,7 @@ def bool_flag(s):
 
 class FrameATSTDataModule(LightningDataModule):
     def __init__(self,
-                 data_path=None,
+                 data_paths=None,
                  batch_size_per_gpu=256,
                  num_workers=10,
                  subset=200000,
@@ -36,13 +38,12 @@ class FrameATSTDataModule(LightningDataModule):
                  **kwargs,
                  ):
         super().__init__()
-        import os
-        from torch.utils.data import ConcatDataset
 
-        dataset_ub=LMDBDataset(data_path,
-                                 split="train",
-                                 subset=subset,
-                                 transform=FrameATSTTrainTransform(
+        # 有多个lmdb文件，传入的是lmdb文件的路径list，为了不破坏其他函数的使用，加入db_path_should_join变量，默认是True，这里传入False
+        dataset_ubs = []
+        for data_path in data_paths:
+            dataset_ubs.append(LMDBDataset(data_path, split="train", db_path_should_join=False, subset=subset,
+                                           transform=FrameATSTTrainTransform(
                                                                    win_length=win_length,
                                                                    aug_tea=aug_tea,
                                                                    aug_stu=aug_stu,
@@ -53,10 +54,9 @@ class FrameATSTDataModule(LightningDataModule):
                                                                    mask_len=mask_len,
                                                                    min_mask_len=min_mask_len,
                                                                    n_mels=n_mels,
-                                                                   **kwargs))
-
+                                                                   **kwargs)))
         # we only use unbalanced set for self supervised pretraining
-        self.dataset = dataset_ub
+        self.dataset = ConcatDataset(dataset_ubs)
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
         self.save_hyperparameters()

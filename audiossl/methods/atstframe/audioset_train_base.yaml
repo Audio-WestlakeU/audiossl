@@ -1,0 +1,37 @@
+data_paths: [
+  "/20A021/audioset/lmdb_ub/train_0.lmdb",
+  "/20A021/audioset/lmdb_ub/train_1.lmdb",
+  "/20A021/audioset/lmdb_ub/train_2.lmdb",
+  "/20A021/audioset/lmdb_ub/train_3.lmdb",
+  "/20A021/audioset/lmdb_ub/train_4.lmdb"
+]
+save_path: "/20A021/audioset/save_path_tmp/"
+nproc: 2
+devices: 0,1
+max_epochs: 100
+warmup_epochs: 10
+#max_steps: 398000 需要在train.py计算,以max_epochs为准
+subset: 1912024 # Audioset-2M
+ema: 0.9996
+learning_rate: 8.0e-5 # 1.0e-4
+#batch_size_per_gpu: 128
+batch_size_per_gpu: 144 # 源代码用了6个GPU，总batch_size是864
+symmetric: True
+aug_tea: False #
+aug_stu: True
+arch: base
+mask_ratio: 0.65
+mask_type: "block"
+#sr: 22050  #16000
+## 用于重新计算输入新的patch_w, 在audio_transformer.py, return FrameAST()
+#n_fft: 2048 #
+#win_length: 2048 #640 一般默认是hop_length的四倍, <=n_fft
+#hop_length: 512  #160
+anchor_len: 10
+n_mels: 64 # 这个参数对应的是spec_h，与n_mels相同
+#spec_w: 1292 # 原来的参数是1001，计算方式是 sr*anchor_len//hop_length + 1，这里的//是floor division. 对应于transform.py里num_patches的计算方式
+patch_h: 64
+patch_w: 4
+mask_len: 5
+pos_type: "cut"
+num_workers: 10

@@ -14,6 +14,7 @@ import pickle
 import tqdm
 import pyarrow as pa
 
+Device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 class Timer:
     def __init__(self):
         self.time=None
@@ -267,15 +268,17 @@ class FSD50KDataset3(data.Dataset):
     def __getitem__(self, index: int):
         file_path = self.files[index]
         waveform, sr = torchaudio.load(file_path,normalize=True)
-        waveform = torchaudio.functional.resample(waveform,sr,self.sr)
-        length = waveform.shape[-1]
-        seg_len = int(self.sr)
+        waveform = waveform.to(Device)
+        resampler = torchaudio.transforms.Resample(sr,self.sr,dtype=waveform.dtype).to(Device)
+        resampled_waveform = resampler(waveform)
+        #length = waveform.shape[-1]
+        #seg_len = int(self.sr)
         
         label = self._parse_labels(self.labels[index])
 
         if self.transform is not None:
-            waveform,label =  self.transform(waveform),label
-        return waveform,label,os.path.basename(file_path)
+            resampled_waveform, label =  self.transform(resampled_waveform),label
+        return resampled_waveform.cpu(),label,os.path.basename(file_path)
 
     def norm_01(self,spec):
         var,mean = torch.var_mean(spec)

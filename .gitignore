@@ -6,3 +6,4 @@ tmp*
 nohup.out
 ckpts
 logs
+.idea
