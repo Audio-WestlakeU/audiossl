@@ -27,8 +27,8 @@ def main(dict_args):
                             callbacks=[ModelCheckpoint(dirpath=dict_args["save_path"],
                                                        every_n_epochs=10,
                                                        save_top_k=-1,
-                                                       filename="checkpoint-{epoch:05d}",
-                                                       save_last=True,
+                                                       filename="checkpoint-{epoch:3d}",
+                                                       save_last=True
                                                        ),
                                        LearningRateMonitor(logging_interval="step"),
                                       ],

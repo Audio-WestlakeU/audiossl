@@ -121,7 +121,8 @@ class FrameATSTLightningModule(LightningModule):
         total_loss_frm,std_frm_stu,std_frm_tea= self.model(melspecs,lengths,masks)
         #loss = total_loss_frm
         #self.log("loss",loss,prog_bar=True,logger=True)
-        self.log("loss_frm",total_loss_frm,on_step=True,on_epoch=True,logger=True)
+        self.log("epoch", self.current_epoch, on_epoch=True, on_step=True)
+        self.log("loss_frm",total_loss_frm,prog_bar=True, on_step=True,on_epoch=True,logger=True)
         self.log("std_frm_tea",std_frm_tea,on_step=True,on_epoch=True,logger=True)
         self.log("std_frm_stu",std_frm_stu,on_step=True,on_epoch=True,logger=True)
         self.log("ema",self.ema_scheduler[self.global_step],logger=True)
@@ -134,8 +135,8 @@ class FrameATSTLightningModule(LightningModule):
             if i == 0:  # only the first group is regularized
                 param_group["weight_decay"] = self.wd_scheduler[self.global_step]
         
-        self.log("wd",self.wd_scheduler[self.global_step],prog_bar=True,logger=True)
-        self.log("lr",param_group["lr"],prog_bar=True,logger=True)
+        self.log("wd",self.wd_scheduler[self.global_step],logger=True)
+        self.log("lr",param_group["lr"],logger=True)
 
     def configure_optimizers(self):
         optimizer = AdamW(get_params_groups(self.model.student),

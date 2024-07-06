@@ -5,17 +5,17 @@ data_paths: [
   "/20A021/audioset/lmdb_ub/train_3.lmdb",
   "/20A021/audioset/lmdb_ub/train_4.lmdb"
 ]
-save_path: "/20A021/audioset/save_path_tmp/"
-nproc: 2
-devices: 0,1
-max_epochs: 100
+save_path: "/20A021/audioset/save_path/pretrain0706"
+nproc: 8
+devices: 0,1,2,3,4,5,6,7
+max_epochs: 200
 warmup_epochs: 10
 #max_steps: 398000 需要在train.py计算,以max_epochs为准
 subset: 1912024 # Audioset-2M
 ema: 0.9996
 learning_rate: 8.0e-5 # 1.0e-4
 #batch_size_per_gpu: 128
-batch_size_per_gpu: 144 # 源代码用了6个GPU，总batch_size是864
+batch_size_per_gpu: 128 # 源代码用了6个GPU，总batch_size是864
 symmetric: True
 aug_tea: False #
 aug_stu: True
