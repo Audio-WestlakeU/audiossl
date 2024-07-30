@@ -25,7 +25,7 @@ def main(dict_args):
                             max_steps=dict_args["max_steps"],
                             logger=[logger_tb,logger_wb],
                             callbacks=[ModelCheckpoint(dirpath=dict_args["save_path"],
-                                                       every_n_epochs=10,
+                                                       every_n_epochs=20,
                                                        save_top_k=-1,
                                                        filename="checkpoint-{epoch:3d}",
                                                        save_last=True
@@ -57,15 +57,18 @@ if __name__ == "__main__":
 
     # 用my_train_small.yaml override train_small.sh中的参数
     dict_args.update(parseConfig(configFile=Path(__file__).parent / "audioset_train_base.yaml"))
+    dict_args["spec_h"] = dict_args["n_mels"]
 
     # 需要根据epoch和batch_size来计算跟step相关的参数
     batch_size = dict_args["nproc"] * dict_args["batch_size_per_gpu"]
-    steps_per_epoch = dict_args['subset'] / batch_size  # 1912024/864 = 2212
+    steps_per_epoch = dict_args['ds_size'] / batch_size  # 1912024/864 = 2212
     dict_args['steps_per_epoch'] = steps_per_epoch
-    # # dict_args["learning_rate"] = dict_args["learning_rate"] * batch_size/256 按这个比例缩小lr，还是overfit，再调小lr
-    dict_args["spec_h"] = dict_args["n_mels"]
-    dict_args['max_steps'] = int(steps_per_epoch * dict_args['max_epochs']) # 2212*100=221200
-    dict_args['warmup_steps'] = int(steps_per_epoch * dict_args['warmup_epochs'])
+    # dict_args["learning_rate"] = dict_args["learning_rate"] * batch_size/256 按这个比例缩小lr，还是overfit，再调小lr
+    # 如果yaml文件已经给出steps的参数，就使用给出的参数，不使用epoch
+    if 'max_steps' not in dict_args:
+        dict_args['max_steps'] = int(steps_per_epoch * dict_args['max_epochs']) # 2212*200=221200
+    if 'warmup_steps' not in dict_args:
+        dict_args['warmup_steps'] = int(steps_per_epoch * dict_args['warmup_epochs'])
     # 保存这些args到训练的文件夹下。
     with open(os.path.join(dict_args["save_path"], 'args.json'), 'w') as fp:
         json.dump(dict_args, fp)

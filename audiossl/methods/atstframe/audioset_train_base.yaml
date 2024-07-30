@@ -5,17 +5,20 @@ data_paths: [
   "/20A021/audioset/lmdb_ub/train_3.lmdb",
   "/20A021/audioset/lmdb_ub/train_4.lmdb"
 ]
-save_path: "/20A021/audioset/save_path/pretrain0706"
+save_path: "/20A021/audioset/save_path/pretrain0723"
 nproc: 8
 devices: 0,1,2,3,4,5,6,7
-max_epochs: 200
-warmup_epochs: 10
-#max_steps: 398000 需要在train.py计算,以max_epochs为准
-subset: 1912024 # Audioset-2M
+# 仍然使用原文给出的max_steps，保持训练曲线和原文复现一致，因为训练不以loss为准，要完成原文所制定的一个完整周期的训练
+#max_epochs: 200 #
+max_steps: 398160 # 240 epochs, 刚开始训练了200epochs，331900 steps，loss曲线没有训练完全
+#warmup_epochs: 10
+warmup_steps: 16590
+subset: 3000000 # 只要大于Audioset-2M的个数，就会使用全部样本，否则随机采样一部分
+ds_size: 1912024
 ema: 0.9996
 learning_rate: 8.0e-5 # 1.0e-4
 #batch_size_per_gpu: 128
-batch_size_per_gpu: 128 # 源代码用了6个GPU，总batch_size是864
+batch_size_per_gpu: 144 # 源代码用了6个GPU，总batch_size是864
 symmetric: True
 aug_tea: False #
 aug_stu: True
