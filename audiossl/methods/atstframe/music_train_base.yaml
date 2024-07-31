@@ -1,20 +1,14 @@
-data_paths: [
-  "/20A021/audioset/lmdb_ub/train_0.lmdb",
-  "/20A021/audioset/lmdb_ub/train_1.lmdb",
-  "/20A021/audioset/lmdb_ub/train_2.lmdb",
-  "/20A021/audioset/lmdb_ub/train_3.lmdb",
-  "/20A021/audioset/lmdb_ub/train_4.lmdb"
-]
-save_path: "/20A021/audioset/save_path/pretrain0731"
-nproc: 6
-devices: 0,1,2,3,4,5
+manifest_path: "/20A021/dataset_from_dyl/train-50up/manifest_ub"
+save_path: "/20A021/dataset_from_dyl/save_path/pretrainBase0804"
+nproc: 1
+devices: 0
 # 仍然使用原文给出的max_steps，保持训练曲线和原文复现一致，因为训练不以loss为准，要完成原文所制定的一个完整周期的训练
 #max_epochs: 200 #
 max_steps: 442500 # 邮件确认的超参数
 #warmup_epochs: 10
 warmup_steps: 22120
-subset: 3000000 # 只要大于Audioset-2M的个数，就会使用全部样本，否则随机采样一部分
-ds_size: 1912024
+#subset: None # 随机采样一部分, 不传入就使用全部训练样本
+ds_size: 218064
 ema: 0.9996
 learning_rate: 8.0e-5 # 1.0e-4
 batch_size_per_gpu: 144 # 源代码用了6个GPU，总batch_size是864

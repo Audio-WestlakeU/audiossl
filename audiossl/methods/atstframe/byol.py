@@ -123,6 +123,7 @@ class MultiCropWrapper(nn.Module):
             torch.tensor([inp.shape[-1] for inp in x]),
             return_counts=True,
         )[1], 0)
+
         start_idx, output_frame, output_cls = 0,torch.empty(0).to(x[0].device),torch.empty(0).to(x[0].device)
 
         for end_idx in idx_crops:

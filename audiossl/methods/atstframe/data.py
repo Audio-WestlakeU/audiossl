@@ -1,6 +1,7 @@
 from pytorch_lightning import LightningDataModule
 from torch.utils import data
 from audiossl.datasets import LMDBDataset
+from audiossl.datasets.music_as_audio import MusicAudioDataset
 from transform import FrameATSTTrainTransform
 import argparse
 import os
@@ -21,7 +22,7 @@ def bool_flag(s):
 
 class FrameATSTDataModule(LightningDataModule):
     def __init__(self,
-                 data_paths=None,
+                 manifest_path=None,
                  batch_size_per_gpu=256,
                  num_workers=10,
                  subset=200000,
@@ -31,7 +32,7 @@ class FrameATSTDataModule(LightningDataModule):
                  freq_wrap=True,
                  mask_ratio=0.75,
                  mask_type="block",
-                 anchor_len=6.,
+                 anchor_len=6,
                  mask_len=5,
                  min_mask_len=2,
                  n_mels=64,
@@ -39,10 +40,9 @@ class FrameATSTDataModule(LightningDataModule):
                  ):
         super().__init__()
 
-        # 有多个lmdb文件，传入的是lmdb文件的路径list，为了不破坏其他函数的使用，加入db_path_should_join变量，默认是True，这里传入False
-        dataset_ubs = []
-        for data_path in data_paths:
-            dataset_ubs.append(LMDBDataset(data_path, split="train", db_path_should_join=False, subset=subset,
+        # we only use unbalanced set for self supervised pretraining
+        # music不用lmdb，直接读取folder的音乐文件
+        self.dataset = MusicAudioDataset(manifest_path, split="train", subset=subset,
                                            transform=FrameATSTTrainTransform(
                                                                    win_length=win_length,
                                                                    aug_tea=aug_tea,
@@ -54,13 +54,10 @@ class FrameATSTDataModule(LightningDataModule):
                                                                    mask_len=mask_len,
                                                                    min_mask_len=min_mask_len,
                                                                    n_mels=n_mels,
-                                                                   **kwargs)))
-        # we only use unbalanced set for self supervised pretraining
-        self.dataset = ConcatDataset(dataset_ubs)
+                                                                   **kwargs))
         self.batch_size=batch_size_per_gpu
         self.num_workers=num_workers
         self.save_hyperparameters()
-    
 
     def train_dataloader(self):
 

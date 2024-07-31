@@ -56,7 +56,7 @@ if __name__ == "__main__":
     dict_args = vars(parser.parse_args())
 
     # 用my_train_small.yaml override train_small.sh中的参数
-    dict_args.update(parseConfig(configFile=Path(__file__).parent / "audioset_train_base.yaml"))
+    dict_args.update(parseConfig(configFile=Path(__file__).parent / "music_train_small.yaml"))
     dict_args["spec_h"] = dict_args["n_mels"]
 
     # 需要根据epoch和batch_size来计算跟step相关的参数
@@ -72,6 +72,7 @@ if __name__ == "__main__":
     # 保存这些args到训练的文件夹下。
     with open(os.path.join(dict_args["save_path"], 'args.json'), 'w') as fp:
         json.dump(dict_args, fp)
+
 
     # train
     main(dict_args)
