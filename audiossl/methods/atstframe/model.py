@@ -144,6 +144,9 @@ class FrameATSTLightningModule(LightningModule):
                           weight_decay=0.)
         return [optimizer]
     def on_train_batch_end(self, outputs, batch, batch_idx: int, unused: int = 0) -> None:
+        if self.global_step == self.max_steps:
+            # Last step, no need to update teacher
+            return
         m = self.ema_scheduler[self.global_step]
         self.model.update_teacher(m)
 
