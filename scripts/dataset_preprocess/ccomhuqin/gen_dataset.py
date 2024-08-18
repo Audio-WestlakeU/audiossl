@@ -13,10 +13,6 @@ DATA_DIR = {"train": "ccom/train",
             "test": "ccom/test"}
 
 EmptyToken = 'NA'
-# label to index
-# with open('index2class.txt') as f:
-#     l2i = {x[1]: int(x[0])
-#            for x in map(lambda x: x.strip().split(','), f)}
 
 STRIDE = 5
 WINDOW_SIZE = 10
@@ -82,14 +78,23 @@ def split2segments(audio_path, save_path):
             label_timelist.append([new_filename, new_onset, new_offset, label])
     return label_timelist
 
+def get_eval_durations():
+    import soundfile as sf
+    # generate duration tsv for eval data
+    eval_meta = pd.read_csv(meta_dir+"/eval/eval.tsv", delimiter="\t")
+    file_list = pd.unique(eval_meta["filename"].values)
+    durations = []
+    for file in file_list:
+        wav, fs = sf.read(file)
+        durations.append(min(10, len(wav) / fs))
+    duration_df = pd.DataFrame({"filename": file_list, "duration": durations})
+    duration_df.to_csv(meta_dir+"/eval/eval_durations.tsv", index=False, sep="\t")
+
 if __name__ == "__main__":
     ori_data_dir = "/20A021/ccomhuqin/data"
     seg_data_dir = "/20A021/ccomhuqin_seg/data"
     meta_dir = "/20A021/ccomhuqin_seg/meta"
-    generate_dataset(ori_audio_dir=ori_data_dir+"/train",
-                     seg_audio_dir=seg_data_dir+"/train",
-                      save_meta=meta_dir+"/train/train.tsv")
-    #generate_dataset(audio_dir="/20a021/ccomhuqin/data/val",
-    #                 save_meta="/20a021/ccomhuqin/meta/val/val.tsv")
-    # generate_dataset(audio_dir="/20a021/ccomhuqin/data/test",
-    #                      save_meta="/20a021/ccomhuqin/meta/test/test.tsv")
+    generate_dataset(ori_audio_dir=ori_data_dir+"/eval",
+                     seg_audio_dir=seg_data_dir+"/eval",
+                      save_meta=meta_dir+"/eval/eval.tsv")
+    get_eval_durations()

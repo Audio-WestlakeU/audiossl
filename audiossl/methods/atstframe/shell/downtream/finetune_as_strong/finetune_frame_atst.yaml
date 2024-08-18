@@ -1,0 +1,13 @@
+save_path: "/20A021/ccomhuqin_seg/save_path/finetune0819/"
+nproc: 4
+devices: 0,1,2,3
+arch: "frameatst"
+pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainSmall0809/last.ckpt"
+learning_rate: 0.05 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
+lr_scale: 0.75
+batch_size_per_gpu: 64
+max_epochs: 100
+dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/utils_as_strong/conf/frame_40.yaml"
+dataset_name: "as_strong"
+freeze_mode: False
+num_workers: 4
