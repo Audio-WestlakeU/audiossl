@@ -6,7 +6,6 @@ from audiossl.methods.atstframe.module_distill import DistillATSTDataModule,Dist
 from pytorch_lightning.callbacks import LearningRateMonitor,ModelCheckpoint
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger,WandbLogger
-from pytorch_lightning.utilities.cli import LightningCLI
 import os
 
 
@@ -56,13 +55,14 @@ if __name__ == "__main__":
 
     data = DistillATSTDataModule(**dict_args)
     trainer:Trainer = Trainer(
-                            strategy="ddp",
+                            strategy="ddp_find_unused_parameters_true",
                             sync_batchnorm=True,
-                            gpus=args.nproc,
+                            accelerator="gpu",
+                            devices=args.nproc,
                             max_steps=args.max_steps,
                             gradient_clip_val=3.0,
                             logger=[logger_tb],
-                            replace_sampler_ddp=False,
+                            use_distributed_sampler=False,
                             callbacks=[ModelCheckpoint(dirpath=args.save_path,
                                                        every_n_epochs=1,
                                                        filename="checkpoint-{epoch:05d}",
