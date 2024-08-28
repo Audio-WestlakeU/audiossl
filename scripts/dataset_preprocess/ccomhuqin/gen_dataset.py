@@ -17,10 +17,8 @@ EmptyToken = 'NA'
 STRIDE = 5
 WINDOW_SIZE = 10
 TARGET_SR = 16000
-def generate_dataset(ori_audio_dir, seg_audio_dir, save_meta):
-    key = 0
+def generate_segment_dataset(ori_audio_dir, seg_audio_dir, save_meta):
     all_label_list = []
-
     if not os.path.exists(ori_audio_dir):
         raise FileNotFoundError
     else:
@@ -78,23 +76,48 @@ def split2segments(audio_path, save_path):
             label_timelist.append([new_filename, new_onset, new_offset, label])
     return label_timelist
 
-def get_eval_durations():
+def get_eval_durations(eval_meta_dir):
     import soundfile as sf
     # generate duration tsv for eval data
-    eval_meta = pd.read_csv(meta_dir+"/eval/eval.tsv", delimiter="\t")
+    eval_meta = pd.read_csv(eval_meta_dir+"/eval.tsv", delimiter="\t")
     file_list = pd.unique(eval_meta["filename"].values)
     durations = []
     for file in file_list:
         wav, fs = sf.read(file)
-        durations.append(min(10, len(wav) / fs))
+        durations.append(len(wav) / fs)
     duration_df = pd.DataFrame({"filename": file_list, "duration": durations})
-    duration_df.to_csv(meta_dir+"/eval/eval_durations.tsv", index=False, sep="\t")
+    duration_df.to_csv(eval_meta_dir+"/eval_durations.tsv", index=False, sep="\t")
+
+def gen_eval_tsv():
+    all_annotation_count = 0
+    audio_dir = "/20A021/ccomhuqin/data/eval"
+    eval_meta_dir = "/20A021/ccomhuqin/meta/eval"
+    df = pd.DataFrame([], columns=["filename", "onset", "offset", "event_label"])
+
+
+    for fullpath in Path(audio_dir).glob('**/*.wav'):
+        audio_path = str(fullpath)
+        csv_path = audio_path.replace(".wav", ".csv")
+        annotation = pd.read_csv(csv_path)
+        item_df = annotation[annotation['PT1-1'].notnull()]
+        all_annotation_count += item_df.shape[0]
+        print(f"current file {audio_path}, has {item_df.shape[0]} items. Total: {all_annotation_count} items.")
+        item_dict ={"filename": np.full(item_df.shape[0], audio_path),
+               "onset": item_df['onset'].values,
+               "offset": item_df['onset'].values+item_df['duration'].values,
+               "event_label": item_df['PT1-1'].values}
+        df = pd.concat([df, pd.DataFrame(item_dict)], ignore_index=True)
+    df.to_csv(eval_meta_dir+"/eval.tsv", index=False, sep="\t")
+
+    get_eval_durations(eval_meta_dir)
 
 if __name__ == "__main__":
     ori_data_dir = "/20A021/ccomhuqin/data"
     seg_data_dir = "/20A021/ccomhuqin_seg/data"
-    meta_dir = "/20A021/ccomhuqin_seg/meta"
-    generate_dataset(ori_audio_dir=ori_data_dir+"/eval",
-                     seg_audio_dir=seg_data_dir+"/eval",
-                      save_meta=meta_dir+"/eval/eval.tsv")
-    get_eval_durations()
+    meta_dir = "/20A021/ccomhuqin/meta"
+    # generate_segment_dataset(ori_audio_dir=ori_data_dir + "/train",
+    #                          seg_audio_dir=seg_data_dir+"/train",
+    #                          save_meta=meta_dir+"/train/train.tsv")
+
+    # For eval, do not segment into 10s.
+    gen_eval_tsv()
