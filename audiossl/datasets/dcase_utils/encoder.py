@@ -214,7 +214,8 @@ class ManyHotEncoder:
         if output_type == "pandas":
             # Create thd-filename-cls list (according to reshape order)
             thd_filename_cls = []
-            str_filenames = [Path(x).stem + ".wav" for x in filenames]
+            #str_filenames = [Path(x).stem + ".wav" for x in filenames] # 这里把filename的全路径去掉了，只留了filename本身，这样和ground_truth对不上了
+            str_filenames = filenames
             str_thds = [str(thd) for thd in thds]
             for thd in str_thds:
                 for filename in str_filenames:
@@ -242,7 +243,7 @@ class ManyHotEncoder:
                 }
             )
             
-            return_dict = {k: g.iloc[:, 1:] for k, g in df.groupby(["thd"])}
+            return_dict = {k: g.iloc[:, 1:] for k, g in df.groupby("thd")}
             # Recheck thresholds
             empty_thds = [thd for thd in thds if thd not in return_dict.keys()]
             for t in empty_thds:

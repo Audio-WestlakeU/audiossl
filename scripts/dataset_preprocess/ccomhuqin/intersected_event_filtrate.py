@@ -51,9 +51,13 @@ def rm_intersec(df):
 def main(meta_path="/20A021/ccomhuqin_seg/meta"):
     os.chdir(meta_path)
     train_df = pd.read_csv("./train/train_common.tsv", delimiter="\t")
+    val_df = pd.read_csv("./val/val_common.tsv", delimiter="\t")
+    # train_new = rm_intersec(train_df)
+    # train_new.to_csv("./train/train_rm_intersect.tsv", index=False, sep="\t")
+    # val_new = rm_intersec(val_df)
+    # val_new.to_csv("./val/val_rm_intersect.tsv", index=False, sep="\t")
+
     eval_df = pd.read_csv("./eval/eval_common.tsv", delimiter="\t")
-    train_new = rm_intersec(train_df)
-    train_new.to_csv("./train/train_rm_intersect.tsv", index=False, sep="\t")
     eval_new = rm_intersec(eval_df)
     eval_new.to_csv("./eval/eval_rm_intersect.tsv", index=False, sep="\t")
 

@@ -14,9 +14,6 @@ DATA_DIR = {"train": "ccom/train",
 
 EmptyToken = 'NA'
 
-STRIDE = 5
-WINDOW_SIZE = 10
-TARGET_SR = 16000
 def generate_segment_dataset(ori_audio_dir, seg_audio_dir, save_meta):
     all_label_list = []
     if not os.path.exists(ori_audio_dir):
@@ -76,7 +73,7 @@ def split2segments(audio_path, save_path):
             label_timelist.append([new_filename, new_onset, new_offset, label])
     return label_timelist
 
-def get_eval_durations(eval_meta_dir):
+def get_eval_durations(eval_meta_dir, max_len=3600):
     import soundfile as sf
     # generate duration tsv for eval data
     eval_meta = pd.read_csv(eval_meta_dir+"/eval.tsv", delimiter="\t")
@@ -84,7 +81,7 @@ def get_eval_durations(eval_meta_dir):
     durations = []
     for file in file_list:
         wav, fs = sf.read(file)
-        durations.append(len(wav) / fs)
+        durations.append(min(len(wav) / fs, max_len))
     duration_df = pd.DataFrame({"filename": file_list, "duration": durations})
     duration_df.to_csv(eval_meta_dir+"/eval_durations.tsv", index=False, sep="\t")
 
@@ -109,15 +106,22 @@ def gen_eval_tsv():
         df = pd.concat([df, pd.DataFrame(item_dict)], ignore_index=True)
     df.to_csv(eval_meta_dir+"/eval.tsv", index=False, sep="\t")
 
-    get_eval_durations(eval_meta_dir)
+    get_eval_durations(eval_meta_dir, max_len=3600) # 对于不切割的audio，计算duration时不用考虑最大值，这里用1个小时作为最大值
+
+def gen_eval_seg_tsv():
+    generate_segment_dataset("/20A021/ccomhuqin/data/eval",
+                             "/20A021/ccomhuqin_seg/data/eval",
+                             "/20A021/ccomhuqin_seg/meta/eval/eval.tsv")
+    get_eval_durations("/20A021/ccomhuqin_seg/meta/eval", max_len=10)
 
 if __name__ == "__main__":
+    STRIDE = 5
+    WINDOW_SIZE = 10
+    TARGET_SR = 16000
     ori_data_dir = "/20A021/ccomhuqin/data"
     seg_data_dir = "/20A021/ccomhuqin_seg/data"
     meta_dir = "/20A021/ccomhuqin/meta"
     # generate_segment_dataset(ori_audio_dir=ori_data_dir + "/train",
     #                          seg_audio_dir=seg_data_dir+"/train",
     #                          save_meta=meta_dir+"/train/train.tsv")
-
-    # For eval, do not segment into 10s.
-    gen_eval_tsv()
+    gen_eval_seg_tsv()

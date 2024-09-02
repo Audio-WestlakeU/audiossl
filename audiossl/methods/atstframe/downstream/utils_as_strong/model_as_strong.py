@@ -125,7 +125,7 @@ class FineTuningPLModule(LightningModule):
         # Get weak label for real data
         strong_loss = self.loss_fn(strong_pred, labels)
         self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True, logger=True)
-        self.log("train/synth/strong_loss", strong_loss)
+        self.log("train/strong_loss", strong_loss)
         return strong_loss
 
     def schedule(self):
@@ -155,9 +155,9 @@ class FineTuningPLModule(LightningModule):
         intersection_f1_macro_student = self.sed_metrics_student.compute_macro_f1()
         val_loss = torch.tensor(np.mean(self.val_loss))
         obj_metric = torch.tensor(intersection_f1_macro_student.item())
-        self.log("val/synth/student/loss_strong", val_loss)
+        self.log("val/student/loss_strong", val_loss)
         self.log("val/object_metric", val_loss, prog_bar=True)
-        self.log("val/synth/student/intersection_f1_macro", intersection_f1_macro_student)
+        self.log("val/student/intersection_f1_macro", intersection_f1_macro_student)
         return obj_metric
 
     def test_step(self, batch, batch_idx):
@@ -183,7 +183,9 @@ class FineTuningPLModule(LightningModule):
             self.test_psds_buffer[th] = pd.concat([self.test_psds_buffer[th], decoded_strong[th]], ignore_index=True)
         # Compute F1 metric
         mid_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 2]
-        self.decoded_05_buffer = self.decoded_05_buffer.append(decoded_strong[mid_val])
+        # use other values instead of mid_val
+        quater_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
+        self.decoded_05_buffer = pd.concat([self.decoded_05_buffer, decoded_strong[quater_val]], ignore_index=True)
         return
 
     def on_test_epoch_end(self) -> None:
@@ -192,6 +194,13 @@ class FineTuningPLModule(LightningModule):
         # Enable parallel computing
         evaluation.g_parallel=True
         psds.g_parallel=True
+        intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
+            {"0.5": self.decoded_05_buffer},
+            self.config["data"]["test_tsv"],
+            self.config["data"]["test_dur"],
+        )
+        print("Intersection F1:", intersection_f1_macro)
+        print("Intersection F1 per category:", f_dict)
         
         psds_score_scenario1 = compute_psds_from_operating_points(
             self.test_psds_buffer,
@@ -217,12 +226,7 @@ class FineTuningPLModule(LightningModule):
             weighted=False,
         )
 
-        intersection_f1_macro = compute_per_intersection_macro_f1(
-            {"0.5": self.decoded_05_buffer},
-            self.config["data"]["test_tsv"],
-            self.config["data"]["test_dur"],
-        )
-        print("Intersection F1:", intersection_f1_macro)
+
         best_test_result = torch.tensor(max(psds_score_scenario1, psds_score_scenario2))
 
         results = {

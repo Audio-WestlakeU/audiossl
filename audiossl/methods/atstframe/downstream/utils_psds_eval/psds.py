@@ -790,58 +790,87 @@ class PSDSEval:
         return tpr_vs_fpr_c, tpr_vs_ctr_c, tpr_vs_efpr_c
 
     @staticmethod
-    def compute_f_score(TP_values, FP_values, FN_values, beta):
+    def inner_compute_f_score(TP_values, FP_values, FN_values, beta):
         """Computes the F-scores for the given TP/FP/FN"""
         k = (1 + beta ** 2)
         f_scores = (k * TP_values) / (k * TP_values + (beta ** 2) * FN_values
                                       + FP_values)
         return f_scores
 
-    def compute_macro_f_score(self, detections, beta=1.):
+    @staticmethod
+    def inner_compute_precision_recall_fscore(TP_values, FP_values, FN_values, beta):
+        precision = TP_values / (TP_values+FP_values)
+        recall = TP_values / (TP_values+FN_values)
+        f_scores = ((1+beta**2) * precision * recall) / (beta**2 * precision + recall)
+        for i, (p,r,f) in enumerate(zip(precision, recall, f_scores)):
+            if np.isnan([p,r,f]).any():
+                print(f"The precision, recall and f-scores of label index {i} is {p, r, f}. Assign NANs to metrics.")
+                precision[i], recall[i], f_scores[i] = np.nan, np.nan, np.nan
+        return precision, recall, f_scores
+
+    def compute_metrics(self, detections, beta=1.):
         """Computes the macro F_score for the given detection table
 
-        The DTC/GTC/CTTC criteria presented in the ICASSP paper (link above)
-        are exploited to compute the confusion matrix. From the latter, class
-        dependent F_score metrics are computed. These are further averaged to
-        compute the macro F_score.
+                The DTC/GTC/CTTC criteria presented in the ICASSP paper (link above)
+                are exploited to compute the confusion matrix. From the latter, class
+                dependent F_score metrics are computed. These are further averaged to
+                compute the macro F_score.
 
-        It is important to notice that a cross-trigger is also counted as
-        false positive.
+                It is important to notice that a cross-trigger is also counted as
+                false positive.
 
-        Args:
-            detections (pandas.DataFrame): A table of system detections
-                that has the following columns:
-                "filename", "onset", "offset", "event_label".
-            beta: coefficient used to put more (beta > 1) or less (beta < 1)
-                emphasis on false negatives.
+                Args:
+                    detections (pandas.DataFrame): A table of system detections
+                        that has the following columns:
+                        "filename", "onset", "offset", "event_label".
+                    beta: coefficient used to put more (beta > 1) or less (beta < 1)
+                        emphasis on false negatives.
 
-        Returns:
-            A tuple with average F_score and dictionary with per-class F_score
+                Returns:
+                    A tuple with average F_score and dictionary with per-class F_score
 
-        Raises:
-            PSDSEvalError: if class instance doesn't have ground truth table
-        """
+                Raises:
+                    PSDSEvalError: if class instance doesn't have ground truth table
+                """
         if self.ground_truth is None:
             raise PSDSEvalError("Ground Truth must be provided before "
                                 "adding the first operating point")
 
         det_t = self._init_det_table(detections)
         counts, tp_ratios, _, _ = self._evaluate_detections(det_t)
-
         per_class_tp = np.diag(counts)[:-1]
         num_gts = per_class_tp / tp_ratios
         per_class_fp = counts[:-1, -1]
         per_class_fn = num_gts - per_class_tp
-        f_per_class = self.compute_f_score(per_class_tp, per_class_fp,
-                                           per_class_fn, beta)
+        f_per_class = self.inner_compute_f_score(per_class_tp, per_class_fp,
+                                                 per_class_fn, beta)
+        precision_per_class, recall_per_class, f_scores_per_class = self.inner_compute_precision_recall_fscore(per_class_tp,
+                                                                                                               per_class_fp,
+                                                                                                               per_class_fn,
+                                                                                                               beta)
+        for i, (v1, v2) in enumerate(zip(f_per_class, f_scores_per_class)):
+            if np.isnan(v1) or np.isnan(v2):
+                f_per_class[i], f_scores_per_class[i] = np.nan, np.nan
+            elif abs(v1 - v2) > 1e-4:
+                print(f"error: f_score calculation gets different values at {i}: {v1} and {v2} !!!")
 
+        mean_metrics_dict = {
+            "precision": np.nanmean(precision_per_class),
+            "recall": np.nanmean(recall_per_class),
+            "f_score": np.nanmean(f_scores_per_class),
+        }
         # remove the injected world label
         class_names_no_world = sorted(set(self.class_names
                                           ).difference([WORLD]))
-        f_dict = {c: f for c, f in zip(class_names_no_world, f_per_class)}
-        f_avg = np.nanmean(f_per_class)
+        precision_per_class = {c: f for c, f in zip(class_names_no_world, precision_per_class)}
+        recall_per_class = {c: f for c, f in zip(class_names_no_world, recall_per_class)}
+        f_per_class = {c: f for c, f in zip(class_names_no_world, f_per_class)}
 
-        return f_avg, f_dict
+        return mean_metrics_dict, precision_per_class, recall_per_class, f_per_class
+
+    def compute_macro_f_score(self, detections, beta=1.):
+        mean_metrics_dict, precision_per_class, recall_per_class, f_dict = self.compute_metrics(detections, beta)
+        return mean_metrics_dict["f_score"], f_dict
 
     def select_operating_points_per_class(self, class_constraints,
                                           alpha_ct=0., beta=1.):
@@ -914,8 +943,8 @@ class PSDSEval:
             tp_counts = tpr * n_cls_gt[class_name]
             fn_counts = n_cls_gt[class_name] - tp_counts
             fp_counts = fpr * dataset_dur / self.nseconds
-            f_scores = self.compute_f_score(tp_counts, fp_counts,
-                                            fn_counts, beta=beta)
+            f_scores = self.inner_compute_f_score(tp_counts, fp_counts,
+                                                  fn_counts, beta=beta)
 
             op_index = None
             if constraint == "tpr":
