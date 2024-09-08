@@ -4,7 +4,7 @@ from torchvision import transforms
 import torchaudio
 import random
 from torch.nn import functional as F
-import numpy as np
+import torch
 random.seed(1234)
 from audiossl.transforms.byol_a import Mixup, RandomResizeCrop
 from audiossl.models.atst.audio_transformer import get_num_patches
@@ -35,6 +35,8 @@ class FrameATSTTrainTransform:
         self.n_mels=n_mels
         self.mask_nooverlap=mask_nooverlap
         self.min_mask_len=min_mask_len
+
+        self.resampler=torchaudio.transforms.Resample(orig_freq=1, new_freq=sr)
 
         self.mel_feature = transforms.Compose(
                                 [melspec_t,
@@ -67,17 +69,17 @@ class FrameATSTTrainTransform:
             self.positive_transform2 = Identity()
 
 
-
-    def __call__(self,input):
+    def __call__(self, waveform, original_sample_rate):
         crops = []
         lengths = []
         masks = []
 
         anchor_len = self.anchor_len
+        resample_waveform = self.apply_resample_mono(waveform, original_sample_rate)
 
         self.positivecrop.transforms[0].size=int(anchor_len*16000)
 
-        crop_positive1=self.positivecrop(input)
+        crop_positive1=self.positivecrop(resample_waveform)
 
         positive_len = anchor_len
         crop_positive2 = crop_positive1
@@ -100,5 +102,12 @@ class FrameATSTTrainTransform:
         masks.extend([mask]*2)
         
         return crops,lengths,masks
-    
+
+    def apply_resample_mono(self, waveform, original_sample_rate):
+        self.resampler.orig_freq = original_sample_rate
+        waveform = self.resampler(waveform)
+        if waveform.size(0) > 1:
+            return torch.mean(waveform, dim=0, keepdim=True)
+        return waveform  # If already mono, return as is
+
 

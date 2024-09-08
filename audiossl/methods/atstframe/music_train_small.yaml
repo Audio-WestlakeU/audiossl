@@ -1,5 +1,6 @@
-manifest_path: "/20A021/dataset_from_dyl/manifest_ub"
-save_path: "/20A021/dataset_from_dyl/save_path/pretrainSmall0809"
+manifest_path: "/20A021/dataset_from_dyl/manifest_ub/truncate"
+need_segmentation: False # original tsv, just truncate.
+save_path: "/20A021/dataset_from_dyl/save_path/pretrainSmall0903"
 nproc: 4
 devices: 0,1,2,3
 #max_epochs: 200 #

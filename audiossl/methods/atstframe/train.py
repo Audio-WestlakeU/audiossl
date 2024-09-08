@@ -38,7 +38,6 @@ def main(dict_args):
     trainer.fit(model,datamodule=data,
                 ckpt_path=last_ckpt if  os.path.exists(last_ckpt) else None)
 def parseConfig(configFile):
-
     with open(configFile, 'r') as f:
         config = yaml.safe_load(f)
     return config
@@ -56,7 +55,7 @@ if __name__ == "__main__":
     dict_args = vars(parser.parse_args())
 
     # 用my_train_small.yaml override train_small.sh中的参数
-    dict_args.update(parseConfig(configFile=Path(__file__).parent / "music_train_small.yaml"))
+    dict_args.update(parseConfig(configFile=Path(__file__).parent / "music_train_base.yaml"))
     dict_args["spec_h"] = dict_args["n_mels"]
 
     # 需要根据epoch和batch_size来计算跟step相关的参数

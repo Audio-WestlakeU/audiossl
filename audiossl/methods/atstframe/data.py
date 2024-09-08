@@ -36,13 +36,15 @@ class FrameATSTDataModule(LightningDataModule):
                  mask_len=5,
                  min_mask_len=2,
                  n_mels=64,
+                 sr=16000,
+                 need_segmentation=False,
                  **kwargs,
                  ):
         super().__init__()
 
         # we only use unbalanced set for self supervised pretraining
         # music不用lmdb，直接读取folder的音乐文件
-        self.dataset = MusicAudioDataset(manifest_path, split="train", subset=subset,
+        self.dataset = MusicAudioDataset(manifest_path, split="train", subset=subset, sr=sr, need_segmentation=need_segmentation,
                                            transform=FrameATSTTrainTransform(
                                                                    win_length=win_length,
                                                                    aug_tea=aug_tea,

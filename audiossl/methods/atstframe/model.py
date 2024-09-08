@@ -162,8 +162,8 @@ class FrameATSTLightningModule(LightningModule):
         parser.add_argument('--ema', default=0.99, type=float, help="""Base EMA
             parameter for teacher update. The value is increased to 1 during training with cosine schedule.
             """)
-        parser.add_argument('--warmup_steps',default=1300,type=int)
-        parser.add_argument('--max_steps',default=39010,type=int)
+        #parser.add_argument('--warmup_steps',default=1300,type=int) remove those 
+        #parser.add_argument('--max_steps',default=39010,type=int)
         parser.add_argument('--pos_type',default="cut",type=str,help="\"cut\" denotes absolute psitional embedding, \"interpolate\" denotes 2D positional embedding used in SSAST")
         parser.add_argument('--avg_blocks',default=0,type=int,help="0 means atst-frame, a positive int value means data2vec style loss")
         parser.add_argument('--patch_embed',default="Linear",type=str,help="Linear or CNN patch embedding")

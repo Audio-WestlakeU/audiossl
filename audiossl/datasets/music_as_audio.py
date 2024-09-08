@@ -8,7 +8,7 @@ import pandas as pd
 
 class MusicAudioDataset(data.Dataset):
     def __init__(self, manifest_path, split="train", transform=None, target_transform=None, multilabel=True,
-                 return_key=False, subset=None):
+                 return_key=False, subset=None, sr=16000, need_segmentation=False):
         self.path = manifest_path
         self.split = split
         self.multilabel = multilabel
@@ -28,13 +28,18 @@ class MusicAudioDataset(data.Dataset):
             raise "split shoud be one of train|valid|eval"
 
         df = pd.read_csv(os.path.join(manifest_path, tsv), sep='\t')
-        self.length = df.shape[0]
+        self.length = len(df['files'].values)
         if subset is not None and subset < self.length:
             df = df.sample(n=subset).reset_index(drop=True)
             self.length = subset
+        if need_segmentation: # TSV has segmentation with start_sec and end_sec
+            self.start_seconds = df['start_second'].values
+            self.end_seconds = df['end_second'].values
         self.files = df['files'].values
         self.labels = df['labels'].values
         self.transform = transform
+        #self.sr = sr
+        self.need_segmentation = need_segmentation
         self.target_transform = target_transform
         self.return_key = return_key
 
@@ -52,11 +57,19 @@ class MusicAudioDataset(data.Dataset):
         file_path = self.files[index]
         key = u'{}'.format(os.path.basename(file_path)).encode('ascii')
         waveform, sr = torchaudio.load(file_path, normalize=True)
-        waveform_mono = torch.mean(waveform, dim=0, keepdim=True)
+
+        if self.need_segmentation: # TSV has segmentation with start_sec and end_sec
+            file_path, start_sec, end_sec = self.files[index], self.start_seconds[index], self.end_seconds[index]
+            start_index, end_index = int(start_sec * sr), int(end_sec * sr)
+            waveform = waveform[:, start_index: end_index]
+        # if sr != self.sr:
+        #     resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sr)
+        #     waveform = resampler(waveform)
+        # waveform_mono = torch.mean(waveform, dim=0, keepdim=True)
         label = self._parse_labels(self.labels[index])
 
         if self.transform is not None:
-            transformed = self.transform(waveform_mono)
+            transformed = self.transform(waveform, sr)
             if self.target_transform is not None:
                 transformed = list(transformed)
                 transformed[0], label = self.target_transform(transformed[0], label)
