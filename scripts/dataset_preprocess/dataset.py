@@ -1,3 +1,6 @@
+import wave
+
+import librosa
 from torch.utils import data
 import torchaudio
 import glob
@@ -10,8 +13,9 @@ import pandas as pd
 import time
 
 import lmdb
-import pickle
-import tqdm
+import soundfile as sf
+from pydub.utils import mediainfo
+from pydub import AudioSegment
 import pyarrow as pa
 
 Device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -221,7 +225,7 @@ class FSD50KDataset2(data.Dataset):
         return len(self.files)
 
 class FSD50KDataset3(data.Dataset):
-    def __init__(self,  path, split="train", multilabel=True, sr=16000, max_len: float = 10, max_num: int = None, transform = None):
+    def __init__(self,  path, split="train", segment=None, multilabel=True, sr=16000, max_num: int = None, transform = None):
         self.path = path
         self.split = split
         self.multilabel = multilabel
@@ -232,29 +236,27 @@ class FSD50KDataset3(data.Dataset):
         self.num_classes = len(self.labels_map)
 
         self.sr = sr
-
-        csv = None
         if split == "train":
-            csv = "tr.csv"
+            tsv = "tr.tsv"
         elif split == "valid":
-            csv = "val.csv"
+            tsv = "val.tsv"
         elif split == "eval":
-            csv = "eval.csv"
+            tsv = "eval.tsv"
         else:
             raise "split shoud be one of train|valid|eval"
 
-        df = pd.read_csv(os.path.join(path,csv))
+        df = pd.read_csv(os.path.join(path, tsv), sep='\t')
         self.files = df['files'].values
         self.labels = df['labels'].values
+        self.segment = segment
+        if segment is not None:  # TSV has segmentation with start_sec
+            self.start_seconds = df['start_second'].values
         assert len(self.files) == len(self.labels)
 
         if max_num is not None and len(self.files) > max_num:
             self.files = self.files[:max_num]
-        self.max_len = max_len
-
         self.transform = transform
-
-
+        self.compute_time = [] # to delete for real run
     def _parse_labels(self, lbls: str) -> torch.Tensor:
         if self.multilabel:
             label_tensor = torch.zeros(len(self.labels_map)).float()
@@ -267,19 +269,36 @@ class FSD50KDataset3(data.Dataset):
 
     def __getitem__(self, index: int):
         file_path = self.files[index]
-        waveform, sr = torchaudio.load(file_path,normalize=True)
+        time1 = time.time()
+        # sr = int(mediainfo(file_path)['sample_rate'])
+        # time2 = time.time()
+        # print(f"{time2-time1}s for mediainfo.")
+
+        sr = sf.SoundFile(file_path).samplerate
+        # print(f"{time3-time1}s for SoundFile.") # 实验证明这个时间是0.002，其他是0.5，AudioSegment最慢
+        #
+        # sr = AudioSegment.from_file(file_path).frame_rate
+        # print(f"{time.time() - time3}s for AudioSegment.")
+
+        start_index = 0 if self.segment is None else int(sr * self.start_seconds[index])
+        num_frames = -1 if self.segment is None else int(sr * self.segment)
+        waveform, waveform_sr = torchaudio.load(file_path, frame_offset=start_index, num_frames=num_frames, normalize=True)
+        #print(f"{time.time()-time1} passed.")
+        assert sr == waveform_sr
         waveform = waveform.to(Device)
-        resampler = torchaudio.transforms.Resample(sr,self.sr,dtype=waveform.dtype).to(Device)
-        resampled_waveform = resampler(waveform)
-        #length = waveform.shape[-1]
-        #seg_len = int(self.sr)
-        
+        if waveform.size(dim=0) > 1: # Convert to mono
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+        resampler = torchaudio.transforms.Resample(waveform_sr,self.sr,dtype=waveform.dtype).to(Device)
+        waveform = resampler(waveform)
         label = self._parse_labels(self.labels[index])
 
         if self.transform is not None:
-            resampled_waveform, label =  self.transform(resampled_waveform),label
-        return resampled_waveform.cpu(),label,os.path.basename(file_path)
+            waveform, label =  self.transform(waveform),label
 
+        self.compute_time.append(time.time() - time1)
+        if len(self.compute_time) > 200:
+            print(f"average time is {np.mean(self.compute_time)}")
+        return waveform.cpu(),label,os.path.basename(file_path)
     def norm_01(self,spec):
         var,mean = torch.var_mean(spec)
         spec -= mean

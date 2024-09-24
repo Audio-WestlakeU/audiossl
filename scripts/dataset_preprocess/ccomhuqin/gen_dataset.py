@@ -5,8 +5,8 @@ import librosa
 import torch
 import torchaudio
 import numpy as np
-from pydub import AudioSegment
 from pathlib import Path
+from tqdm import tqdm
 
 DATA_DIR = {"train": "ccom/train",
             "val": "ccom/val",
@@ -57,7 +57,7 @@ def split2segments(audio_path, save_path):
         torchaudio.save(new_filename, clip, TARGET_SR)
         for onset, duration in intresserad:
             label = intresserad[(onset, duration)]
-            # 标记的PT有任意一段在当前5s clip内，都要标记对应的frame
+            # 标记的PT有任意一段在当前clip内，都要标记对应的frame
             offset = onset + duration
             if offset <= start or end <= onset:
                 # no overlap

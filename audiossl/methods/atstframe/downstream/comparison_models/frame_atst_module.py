@@ -45,12 +45,12 @@ class FrameATSTPredModule(pl.LightningModule):
                     p.requires_grad = True
 
     def finetune_mannual_train(self):
-        if self.last_layer:
+        if self.last_layer:   # 不是as_strong, 就是dcase，DESED dataset。根据论文，只unfreeze最后一个encoder block
             for i, layer in enumerate(self.encoder.blocks):
                 if i == len(self.encoder.blocks) - 1:
                     layer.train()
             self.encoder.norm_frame.train()
-        else:        
+        else:        # as_strong dataset
             self.encoder.train()
 
 def get_frame_atst(pretrained_ckpt_path, **kwargs):

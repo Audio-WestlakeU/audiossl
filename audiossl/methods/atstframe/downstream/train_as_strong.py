@@ -89,6 +89,7 @@ def run(dict_args, pretrained_module):
             warmup_epochs=dict_args["warmup_epochs"],
             freeze_mode=dict_args["freeze_mode"],
             lr_scale=dict_args["lr_scale"],
+            is_binary=dict_args["is_binary"]
         )
     strategy = 'auto' if dict_args["nproc"] == 1 else DDPStrategy(find_unused_parameters=False)
     trainer: Trainer = Trainer(

@@ -1,13 +1,14 @@
-save_path: "/20A021/ccomhuqin_seg/save_path/finetune0828/"
-nproc: 1
+save_path: "/20A021/ccomhuqin_seg/save_path/finetune-debug"
+nproc: 4
 devices: 0,1,2,3
 arch: "frameatst"
-test_from_checkpoint: "/20A021/ccomhuqin_seg/save_path/finetune0828/last.ckpt" # This value means only test mode, NO TRAINING!!!!!
-pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainSmall0809/last.ckpt"
+is_binary: True # 这个表示是否是二分类，也就是类别是否会重叠，如果是二分类，用sigmoid+BCEloss；如果不是，即多分类不重叠，用CrossEntropyLoss(linear自带softmax）
+#test_from_checkpoint: "/20A021/ccomhuqin_seg/save_path/finetune0922/last.ckpt" # This value means only test mode, NO TRAINING!!!!!
+pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
 learning_rate: 0.05 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
 lr_scale: 0.75
 batch_size_per_gpu: 64
-max_epochs: 200
+max_epochs: 100
 dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/utils_as_strong/conf/frame_40.yaml"
 dataset_name: "ccomhuqin_as_strong" # 在datasets/init.py register新的dataset，因为num_label需要修改
 freeze_mode: False

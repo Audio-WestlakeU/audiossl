@@ -85,14 +85,13 @@ def dataset2lmdb(dataset, save_prefix, write_frequency=5000, max_num=400000, num
     db.sync()
     db.close()
 
-def folder2lmdb(dpath, split="train",lmdb_dir=None, write_frequency=5000, max_num=200000, num_workers=5):
+def folder2lmdb(dpath, split="train",lmdb_dir=None, write_frequency=5000, max_num=200000, num_workers=5, segment=None, sr=16000):
 
     if lmdb_dir is None:
         lmdb_dir=dpath
-    ds = dataset.FSD50KDataset3(dpath,split=split)
+    ds = dataset.FSD50KDataset3(dpath,split=split, segment=segment, sr=sr)
     #dataloader = DataLoader(ds,num_workers=num_workers,shuffle=True)
     #i = iter(ds)
-
 
     if len(ds) > max_num:
         lmdb_split = 0
@@ -102,8 +101,8 @@ def folder2lmdb(dpath, split="train",lmdb_dir=None, write_frequency=5000, max_nu
         lmdb_path = osp.join(lmdb_dir, "{}.lmdb".format(split))
 
     if os.path.exists(lmdb_path):
-        print("{} already exists, overwriting it.".format(lmdb_path))
-        exit(0)
+        print("{} already exists!!! Overwriting it.".format(lmdb_path))
+        #exit(0)
     isdir = os.path.isdir(lmdb_path)
 
     db = lmdb.open(lmdb_path, subdir=isdir,

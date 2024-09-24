@@ -35,9 +35,7 @@ class FrameATSTTrainTransform:
         self.n_mels=n_mels
         self.mask_nooverlap=mask_nooverlap
         self.min_mask_len=min_mask_len
-
-        self.resampler=torchaudio.transforms.Resample(orig_freq=1, new_freq=sr)
-
+        self.target_sample_rate = sr
         self.mel_feature = transforms.Compose(
                                 [melspec_t,
                                 to_db,
@@ -69,17 +67,26 @@ class FrameATSTTrainTransform:
             self.positive_transform2 = Identity()
 
 
+    def plot_mel(self, mel_feature, save_mel_img_name):
+        # 保存一些频谱图像，确保之前的load，resample，truncate操作大概是对的，和pretrain_dataset_utils用librosa生成的频谱图对比一下
+        import matplotlib.pyplot as plt
+        import librosa
+        plt.figure()
+        one_mel_feature = mel_feature.cpu().numpy()[0]
+        librosa.display.specshow(one_mel_feature)
+        plt.savefig("/20A021/dataset_from_dyl/manifest_ub/segment_random_sample/"+save_mel_img_name+".png")
+
     def __call__(self, waveform, original_sample_rate):
         crops = []
         lengths = []
         masks = []
 
         anchor_len = self.anchor_len
-        resample_waveform = self.apply_resample_mono(waveform, original_sample_rate)
+        waveform = self.apply_resample_mono(waveform, original_sample_rate)
 
         self.positivecrop.transforms[0].size=int(anchor_len*16000)
 
-        crop_positive1=self.positivecrop(resample_waveform)
+        crop_positive1=self.positivecrop(waveform)
 
         positive_len = anchor_len
         crop_positive2 = crop_positive1
@@ -104,10 +111,14 @@ class FrameATSTTrainTransform:
         return crops,lengths,masks
 
     def apply_resample_mono(self, waveform, original_sample_rate):
-        self.resampler.orig_freq = original_sample_rate
-        waveform = self.resampler(waveform)
-        if waveform.size(0) > 1:
-            return torch.mean(waveform, dim=0, keepdim=True)
-        return waveform  # If already mono, return as is
+        if waveform.size(dim=0) > 1: # Convert to mono
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+        if original_sample_rate != self.target_sample_rate:
+            resampler = torchaudio.transforms.Resample(orig_freq=original_sample_rate, new_freq=self.target_sample_rate)
+            waveform = resampler(waveform)
+            #waveform = torchaudio.functional.resample(waveform, orig_freq=original_sample_rate, new_freq=self.target_sample_rate)
+        # if resampled_waveform.size(1) != 160000:
+        #     print(f"waveform of sr: {original_sample_rate} before and after resample is size:{waveform.size(1)} {resampled_waveform.size(1)}")
+        return waveform
 
 

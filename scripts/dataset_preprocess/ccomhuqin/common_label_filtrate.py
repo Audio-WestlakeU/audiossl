@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 在Audioset_strong数据集，只有train和eval，没有validation set
 胡琴数据集从train拿出了部分作为validation, eval就是test数据集
 '''
-def main(meta_path="/20A021/ccomhuqin/meta"):
+def main(meta_path):
     os.chdir(meta_path)
 
     train_meta = pd.read_csv("./train/train.tsv", sep="\t")
@@ -64,4 +64,5 @@ def main(meta_path="/20A021/ccomhuqin/meta"):
 
 if __name__ == "__main__":
     LABEL_to_remove = "DTG"
-    main()
+    meta_path = "/20A021/ccomhuqin_seg/meta"
+    main(meta_path)

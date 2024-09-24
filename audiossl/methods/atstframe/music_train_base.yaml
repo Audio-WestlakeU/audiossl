@@ -1,6 +1,6 @@
-manifest_path: "/20A021/dataset_from_dyl/manifest_ub/segment_random"
+manifest_path: "/20A021/dataset_from_dyl/manifest_ub/segment_random_sample"
 need_segmentation: True # TSV has segmentation with start_sec and end_sec
-save_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0910"
+save_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916"
 nproc: 6
 devices: 0,1,2,3,4,5
 # 仍然使用原文给出的max_steps，保持训练曲线和原文复现一致，因为训练不以loss为准，要完成原文所制定的一个完整周期的训练
@@ -8,7 +8,7 @@ max_epochs: 200 #
 #max_steps: 442500 # 邮件确认的超参数, 以data_size=1912024为准计算的，step/epoch=2212
 warmup_epochs: 10
 #warmup_steps: 22120
-subset: 2000000 # 随机采样一部分, 不传入就使用全部训练样本
+subset: 2000000 #随机采样一部分, 不传入就使用全部训练样本
 ds_size: 2000000
 ema: 0.9996
 learning_rate: 8.0e-5 # 1.0e-4
@@ -31,4 +31,4 @@ patch_h: 64
 patch_w: 4
 mask_len: 5
 pos_type: "cut"
-num_workers: 20
+num_workers: 10

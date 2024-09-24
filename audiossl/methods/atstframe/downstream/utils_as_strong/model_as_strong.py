@@ -32,10 +32,11 @@ def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.
     """Calls BCE with logits and cast the target one_hot (y) encoding to floating point precision."""
     return F.binary_cross_entropy_with_logits(x, y.float())
 
+
 class LinearHead(nn.Module):
 
     """Linear layer with attention module for DCASE task"""
-    def __init__(self, dim, num_labels=1000,use_norm=True,affine=False):
+    def __init__(self, dim, num_labels=1000,use_norm=True,affine=False,use_sigmoid=True):
         super().__init__()
         self.num_labels = num_labels
         self.use_norm=use_norm
@@ -44,6 +45,7 @@ class LinearHead(nn.Module):
         self.linear = nn.Linear(dim, num_labels)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
         self.linear.bias.data.zero_()
+        self.use_sigmoid = use_sigmoid
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, temp=1):
@@ -54,9 +56,11 @@ class LinearHead(nn.Module):
             x = self.norm(x)
         x = x.squeeze(-1).transpose(1, 2)
         # linear layer + get strong predictions
-        strong = self.sigmoid(self.linear(x) / temp)
+        if self.use_sigmoid:
+            strong = self.sigmoid(self.linear(x) / temp)
+        else:
+            strong = self.linear(x) / temp
         return strong.transpose(1, 2)
-
 
 class FineTuningPLModule(LightningModule):
     def __init__(self,
@@ -70,7 +74,8 @@ class FineTuningPLModule(LightningModule):
                  multi_label=False,
                  metric_save_dir=None,
                  freeze_mode=False,
-                 lr_scale=1.0,):
+                 lr_scale=1.0,
+                 is_binary=True):
         super().__init__()
         self.freeze_mode = freeze_mode
         self.learning_rate = learning_rate
@@ -79,10 +84,10 @@ class FineTuningPLModule(LightningModule):
         self.niter_per_epoch = niter_per_epoch
         self.metric_save_dir = metric_save_dir
         self.encoder = encoder
-        self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
+        self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False, use_sigmoid=is_binary)
         self.multi_label = multi_label
         self.num_labels = num_labels
-        self.loss_fn = torch.nn.BCELoss()
+        self.loss_fn = torch.nn.BCELoss() if is_binary is True else torch.nn.CrossEntropyLoss()
         self.monitor = 0
         self.val_loss = []
         self.save_hyperparameters(ignore=["encoder", ])
@@ -108,6 +113,7 @@ class FineTuningPLModule(LightningModule):
         )
         self.test_psds_buffer = {k: pd.DataFrame() for k in test_thresholds}
         self.decoded_05_buffer = pd.DataFrame()
+        self.decoded_025_buffer = pd.DataFrame()
         self.lr_scale = lr_scale
 
     def training_step(self, batch, batch_idx):        
@@ -121,6 +127,8 @@ class FineTuningPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)
+
+        labels = labels
 
         # Get weak label for real data
         strong_loss = self.loss_fn(strong_pred, labels)
@@ -183,9 +191,10 @@ class FineTuningPLModule(LightningModule):
             self.test_psds_buffer[th] = pd.concat([self.test_psds_buffer[th], decoded_strong[th]], ignore_index=True)
         # Compute F1 metric
         mid_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 2]
+        self.decoded_05_buffer = pd.concat([self.decoded_05_buffer, decoded_strong[mid_val]], ignore_index=True)
         # use other values instead of mid_val
-        quater_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
-        self.decoded_05_buffer = pd.concat([self.decoded_05_buffer, decoded_strong[quater_val]], ignore_index=True)
+        quarter_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
+        self.decoded_025_buffer = pd.concat([self.decoded_025_buffer, decoded_strong[quarter_val]], ignore_index=True)
         return
 
     def on_test_epoch_end(self) -> None:
@@ -194,6 +203,10 @@ class FineTuningPLModule(LightningModule):
         # Enable parallel computing
         evaluation.g_parallel=True
         psds.g_parallel=True
+
+        # save self.decoded_buffer as tsv file
+        self.decoded_05_buffer.to_csv(os.path.join(save_dir, "pred_0.5.csv"), index=False)
+        self.decoded_025_buffer.to_csv(os.path.join(save_dir, "pred_0.25.csv"), index=False)
         intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
             {"0.5": self.decoded_05_buffer},
             self.config["data"]["test_tsv"],

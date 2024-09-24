@@ -4,8 +4,7 @@ from audiossl.datasets import LMDBDataset
 from audiossl.datasets.music_as_audio import MusicAudioDataset
 from transform import FrameATSTTrainTransform
 import argparse
-import os
-from torch.utils.data import ConcatDataset
+
 def bool_flag(s):
     """
     Parse boolean arguments from the command line.
@@ -44,7 +43,7 @@ class FrameATSTDataModule(LightningDataModule):
 
         # we only use unbalanced set for self supervised pretraining
         # music不用lmdb，直接读取folder的音乐文件
-        self.dataset = MusicAudioDataset(manifest_path, split="train", subset=subset, sr=sr, need_segmentation=need_segmentation,
+        self.dataset = MusicAudioDataset(manifest_path, split="train", subset=subset, anchor_len=anchor_len, need_segmentation=need_segmentation,
                                            transform=FrameATSTTrainTransform(
                                                                    win_length=win_length,
                                                                    aug_tea=aug_tea,
