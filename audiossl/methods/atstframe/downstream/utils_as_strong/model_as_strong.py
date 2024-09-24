@@ -36,7 +36,7 @@ def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.
 class LinearHead(nn.Module):
 
     """Linear layer with attention module for DCASE task"""
-    def __init__(self, dim, num_labels=1000,use_norm=True,affine=False,use_sigmoid=True):
+    def __init__(self, dim, num_labels=1000,use_norm=True,affine=False):
         super().__init__()
         self.num_labels = num_labels
         self.use_norm=use_norm
@@ -45,7 +45,6 @@ class LinearHead(nn.Module):
         self.linear = nn.Linear(dim, num_labels)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
         self.linear.bias.data.zero_()
-        self.use_sigmoid = use_sigmoid
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, temp=1):
@@ -56,10 +55,7 @@ class LinearHead(nn.Module):
             x = self.norm(x)
         x = x.squeeze(-1).transpose(1, 2)
         # linear layer + get strong predictions
-        if self.use_sigmoid:
-            strong = self.sigmoid(self.linear(x) / temp)
-        else:
-            strong = self.linear(x) / temp
+        strong = self.sigmoid(self.linear(x) / temp)
         return strong.transpose(1, 2)
 
 class FineTuningPLModule(LightningModule):
@@ -74,8 +70,7 @@ class FineTuningPLModule(LightningModule):
                  multi_label=False,
                  metric_save_dir=None,
                  freeze_mode=False,
-                 lr_scale=1.0,
-                 is_binary=True):
+                 lr_scale=1.0):
         super().__init__()
         self.freeze_mode = freeze_mode
         self.learning_rate = learning_rate
@@ -84,10 +79,10 @@ class FineTuningPLModule(LightningModule):
         self.niter_per_epoch = niter_per_epoch
         self.metric_save_dir = metric_save_dir
         self.encoder = encoder
-        self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False, use_sigmoid=is_binary)
+        self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
         self.multi_label = multi_label
         self.num_labels = num_labels
-        self.loss_fn = torch.nn.BCELoss() if is_binary is True else torch.nn.CrossEntropyLoss()
+        self.loss_fn = torch.nn.BCELoss()
         self.monitor = 0
         self.val_loss = []
         self.save_hyperparameters(ignore=["encoder", ])
@@ -127,8 +122,6 @@ class FineTuningPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)
-
-        labels = labels
 
         # Get weak label for real data
         strong_loss = self.loss_fn(strong_pred, labels)
@@ -199,6 +192,7 @@ class FineTuningPLModule(LightningModule):
 
     def on_test_epoch_end(self) -> None:
         save_dir = os.path.join(self.metric_save_dir, "metrics_test")
+        os.makedirs(save_dir, exist_ok=True)
         # calculate the metrics
         # Enable parallel computing
         evaluation.g_parallel=True

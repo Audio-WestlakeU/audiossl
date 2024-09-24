@@ -1,9 +1,8 @@
-save_path: "/20A021/ccomhuqin_seg/save_path/finetune-debug"
-nproc: 4
+save_path: "/20A021/ccomhuqin_seg/save_path/finetune-all/finetune0924"
+nproc: 1
 devices: 0,1,2,3
 arch: "frameatst"
-is_binary: True # 这个表示是否是二分类，也就是类别是否会重叠，如果是二分类，用sigmoid+BCEloss；如果不是，即多分类不重叠，用CrossEntropyLoss(linear自带softmax）
-#test_from_checkpoint: "/20A021/ccomhuqin_seg/save_path/finetune0922/last.ckpt" # This value means only test mode, NO TRAINING!!!!!
+test_from_checkpoint: "/20A021/ccomhuqin_seg/save_path/finetune-all/finetune0924/last.ckpt" # This value means only test mode, NO TRAINING!!!!!
 pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
 learning_rate: 0.05 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
 lr_scale: 0.75

@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 在Audioset_strong数据集，只有train和eval，没有validation set
 胡琴数据集从train拿出了部分作为validation, eval就是test数据集
 '''
-def main(meta_path):
+def main(meta_path, remove_DTG=False):
     os.chdir(meta_path)
 
     train_meta = pd.read_csv("./train/train.tsv", sep="\t")
@@ -29,7 +29,8 @@ def main(meta_path):
 
     assert train_val_common_labels.sort() == common_labels.sort()
 
-    common_labels.remove(LABEL_to_remove)
+    if remove_DTG:
+        common_labels.remove("DTG")
 
     print("Total common labels:", len(common_labels))
     with open("./common_labels.txt", "w") as f:
@@ -61,8 +62,6 @@ def main(meta_path):
     val_meta_filt.to_csv("./val/val_common.tsv", index=False, sep="\t")
     eval_meta_filt.to_csv("./eval/eval_common.tsv", index=False, sep="\t")
 
-
 if __name__ == "__main__":
-    LABEL_to_remove = "DTG"
     meta_path = "/20A021/ccomhuqin_seg/meta"
-    main(meta_path)
+    main(meta_path, remove_DTG=False)

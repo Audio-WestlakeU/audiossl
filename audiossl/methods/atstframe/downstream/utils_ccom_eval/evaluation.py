@@ -82,8 +82,8 @@ if __name__ == "__main__":
     #----------------ATST-----------------------
     test_tsv = "/20A021/ccomhuqin_seg/meta/eval/eval_rm_intersect.tsv"
     test_dur = "/20A021/ccomhuqin_seg/meta/eval/eval_durations.tsv"
-    metrics_dir = "/20A021/ccomhuqin_seg/save_path/finetune0922/metrics_test/"
-    compute_metrics(threshold=0.5, pred_csv=metrics_dir + "pred_0.5.csv", save_path=metrics_dir)
+    metrics_dir = "/20A021/ccomhuqin_seg/save_path/finetune-all/finetune0924/metrics_test/"
+    compute_metrics(threshold=0.25, pred_csv=metrics_dir + "pred_0.25.csv", save_path=metrics_dir)
 
     #---------------MERT-------------------
     # test_tsv = "/20A021/ccomhuqin/meta/eval/eval_rm_intersect.tsv"

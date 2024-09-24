@@ -43,7 +43,7 @@ def run(dict_args, pretrained_module):
 
     """train a linear classifier on extracted embedding"""
     # train
-    logger_tb = TensorBoardLogger(save_path, name="tb_logs")
+    #logger_tb = TensorBoardLogger(save_path, name="tb_logs")
     logger_wb = WandbLogger(save_dir=dict_args["save_path"], name="wb_logs")
     num_labels = data.num_labels
     multi_label = data.multi_label
@@ -89,7 +89,6 @@ def run(dict_args, pretrained_module):
             warmup_epochs=dict_args["warmup_epochs"],
             freeze_mode=dict_args["freeze_mode"],
             lr_scale=dict_args["lr_scale"],
-            is_binary=dict_args["is_binary"]
         )
     strategy = 'auto' if dict_args["nproc"] == 1 else DDPStrategy(find_unused_parameters=False)
     trainer: Trainer = Trainer(
@@ -101,7 +100,7 @@ def run(dict_args, pretrained_module):
         devices=dict_args["nproc"],
         gradient_clip_val=3.0,
         max_epochs=dict_args["max_epochs"],
-        logger=[logger_tb, logger_wb],
+        logger=logger_wb,
         callbacks=[
             ckpt_cb,
             early_stop_cb,
@@ -194,9 +193,10 @@ def main():
         print("Finetune mode")
         pretrained_module.finetune_mode()
 
-    # 保存这些args到训练的文件夹下。
-    with open(os.path.join(dict_args["save_path"], 'args.json'), 'w') as fp:
-        json.dump(dict_args, fp)
+    # 只有当训练的时候，才保存这些args到训练的文件夹下。
+    if dict_args["test_from_checkpoint"] is None:
+        with open(os.path.join(dict_args["save_path"], 'args.json'), 'w') as fp:
+            json.dump(dict_args, fp)
     run(dict_args, pretrained_module)
     pl.seed_everything(42)
 
