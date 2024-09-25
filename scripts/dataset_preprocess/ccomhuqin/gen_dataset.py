@@ -73,17 +73,16 @@ def split2segments(audio_path, save_path):
             label_timelist.append([new_filename, new_onset, new_offset, label])
     return label_timelist
 
-def get_eval_durations(eval_meta_dir, max_len=3600):
+def get_durations(meta_tsv, save_tsv):
     import soundfile as sf
-    # generate duration tsv for eval data
-    eval_meta = pd.read_csv(eval_meta_dir+"/eval.tsv", delimiter="\t")
+    eval_meta = pd.read_csv(meta_tsv, delimiter="\t")
     file_list = pd.unique(eval_meta["filename"].values)
     durations = []
     for file in file_list:
         wav, fs = sf.read(file)
-        durations.append(min(len(wav) / fs, max_len))
+        durations.append(len(wav) / fs)
     duration_df = pd.DataFrame({"filename": file_list, "duration": durations})
-    duration_df.to_csv(eval_meta_dir+"/eval_durations.tsv", index=False, sep="\t")
+    duration_df.to_csv(save_tsv, index=False, sep="\t")
 
 def gen_eval_tsv():
     all_annotation_count = 0
@@ -106,13 +105,14 @@ def gen_eval_tsv():
         df = pd.concat([df, pd.DataFrame(item_dict)], ignore_index=True)
     df.to_csv(eval_meta_dir+"/eval.tsv", index=False, sep="\t")
 
-    get_eval_durations(eval_meta_dir, max_len=3600) # 对于不切割的audio，计算duration时不用考虑最大值，这里用1个小时作为最大值
+    get_durations(eval_meta_dir+"/eval.tsv", eval_meta_dir+"/eval_durations.tsv")
 
 def gen_eval_seg_tsv():
     generate_segment_dataset("/20A021/ccomhuqin/data/eval",
                              "/20A021/ccomhuqin_seg/data/eval",
                              "/20A021/ccomhuqin_seg/meta/eval/eval.tsv")
-    get_eval_durations("/20A021/ccomhuqin_seg/meta/eval", max_len=10)
+    get_durations("/20A021/ccomhuqin_seg/meta/eval", max_len=10)
+
 
 if __name__ == "__main__":
     STRIDE = 5

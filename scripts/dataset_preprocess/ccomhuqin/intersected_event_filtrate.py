@@ -6,6 +6,10 @@ import os
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+
+from scripts.dataset_preprocess.ccomhuqin.gen_dataset import get_durations
+
+
 def process_onset_offset(onset, offset):
     onset_list, offset_list = [], []
     wide_onset = onset[0]
@@ -48,6 +52,27 @@ def rm_intersec(df):
                  })])
     return return_df
 
+def calculate_pos_neg_ratio_per_class(meta_dir= "/20A021/ccomhuqin_seg/meta/train"):
+    train_duration_df = pd.read_csv(meta_dir+'/train_duration.tsv', sep="\t")
+    total_duration = train_duration_df['duration'].sum()
+    print(f'Add durations of all audio files in duration.tsv file: {total_duration/60.0} minutes')
+
+    train_meta = pd.read_csv(meta_dir+'/train.tsv', sep="\t")
+    class_dict = dict()
+    for index, row in tqdm(train_meta.iterrows()):
+        label = row['event_label']
+        label_duration = row['offset'] - row['onset']
+        if label in class_dict:
+            class_dict[label] += label_duration
+        else:
+            class_dict[label] = label_duration
+    row = []
+    for key, value in class_dict.items():
+        row.append([key, value, value/total_duration])
+    df = pd.DataFrame(row, columns=['label', 'duration', 'ratio'])
+    df.to_csv(meta_dir+'/label_duration.tsv', sep="\t", index=False)
+
+
 def main(meta_path="/20A021/ccomhuqin_seg/meta"):
     os.chdir(meta_path)
     train_df = pd.read_csv("./train/train_common.tsv", delimiter="\t")
@@ -62,4 +87,5 @@ def main(meta_path="/20A021/ccomhuqin_seg/meta"):
     eval_new.to_csv("./eval/eval_rm_intersect.tsv", index=False, sep="\t")
 
 if __name__ == "__main__":
-    main()
+    #main()
+    calculate_pos_neg_ratio_per_class()

@@ -45,7 +45,7 @@ class LinearHead(nn.Module):
         self.linear = nn.Linear(dim, num_labels)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
         self.linear.bias.data.zero_()
-        self.sigmoid = nn.Sigmoid()
+        #self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, temp=1):
         # flatten
@@ -55,8 +55,8 @@ class LinearHead(nn.Module):
             x = self.norm(x)
         x = x.squeeze(-1).transpose(1, 2)
         # linear layer + get strong predictions
-        strong = self.sigmoid(self.linear(x) / temp)
-        return strong.transpose(1, 2)
+        strong = self.linear(x) / temp
+        return strong
 
 class FineTuningPLModule(LightningModule):
     def __init__(self,
@@ -82,7 +82,7 @@ class FineTuningPLModule(LightningModule):
         self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
         self.multi_label = multi_label
         self.num_labels = num_labels
-        self.loss_fn = torch.nn.BCELoss()
+        self.loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([5.0, 2.0, 10.0, 5.0, 2.0, 1.5, 1.5, 1.0]))
         self.monitor = 0
         self.val_loss = []
         self.save_hyperparameters(ignore=["encoder", ])
@@ -122,6 +122,8 @@ class FineTuningPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)
+        labels = labels.transpose(1, 2)
+        # 这里把pred和labels统一成(batch_size, time, num_classes), 默认类别是最后一个维度，就可以使用pos_weight=tensor(num_classes)
 
         # Get weak label for real data
         strong_loss = self.loss_fn(strong_pred, labels)
@@ -144,6 +146,7 @@ class FineTuningPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)
+        labels = labels.transpose(1, 2) # 同training_step()
         loss_strong_student = self.loss_fn(
             strong_pred, labels
         )
@@ -168,11 +171,13 @@ class FineTuningPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)
+        labels = labels.transpose(1, 2)  # 同training_step()
         # Get weak label for real data
         test_loss = self.loss_fn(strong_pred, labels)
         
         self.log("test/real/strong_loss", test_loss, prog_bar=True, logger=True)
-        # Compute PSDS (Different from F1 metric, PSDS computes the ROC, which requires various thresholds from 0 to 1.)   
+        # Compute PSDS (Different from F1 metric, PSDS computes the ROC, which requires various thresholds from 0 to 1.)
+        strong_pred = strong_pred.transpose(1, 2)  # 这里再交换一次num_class和time的维度，因为原始代码是按照(bsz, cls, T)进行的后面decode的运算。但是为了计算loss，必须把cls维度放最后。
         decoded_strong = gpu_decode_preds(
             strong_pred, 
             thresholds=list(self.test_psds_buffer.keys()),

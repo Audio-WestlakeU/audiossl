@@ -53,7 +53,7 @@ def run(dict_args, pretrained_module):
                               save_last=True,
                               monitor="val/object_metric",
                               mode="min",
-                              save_top_k=3,
+                              save_top_k=1,
                               )
     early_stop_cb = EarlyStopping(
         monitor="val/object_metric",
