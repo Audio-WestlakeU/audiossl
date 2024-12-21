@@ -10,13 +10,15 @@ from pytorch_lightning import LightningModule
 from torch.nn import functional as F
 from audiossl.datasets.as_strong_utils.as_strong_dict import get_lab_dict
 from audiossl.datasets.dcase_utils import ManyHotEncoder
+from audiossl.methods.atstframe.downstream.utils_ccom_eval.my_decode import write_results
 from audiossl.utils.common import cosine_scheduler_epoch
 from audiossl.methods.atstframe.downstream.utils_psds_eval import evaluation, psds
 from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
-    decode_preds,
+    onehot_decode_preds,
     MedianPool2d,
     SEDMetrics,
-    gpu_decode_preds
+    gpu_decode_preds,
+    onehot_gpu_decode_preds
 )
 from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
     compute_per_intersection_macro_f1,
@@ -56,7 +58,7 @@ class LinearHead(nn.Module):
         x = x.squeeze(-1).transpose(1, 2)
         # linear layer + get strong predictions
         strong = self.linear(x) / temp
-        return strong
+        return strong.transpose(1, 2)
 
 class FineTuningPLModule(LightningModule):
     def __init__(self,
@@ -82,33 +84,46 @@ class FineTuningPLModule(LightningModule):
         self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
         self.multi_label = multi_label
         self.num_labels = num_labels
-        self.loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([5.0, 2.0, 10.0, 5.0, 2.0, 1.5, 1.5, 1.0]))
+
         self.monitor = 0
         self.val_loss = []
         self.save_hyperparameters(ignore=["encoder", ])
         with open(dcase_conf, "r") as f:
             self.config = yaml.safe_load(f)
-        classes_labels = get_lab_dict(self.config["data"]["label_dict"])
+        self.classes_labels = get_lab_dict(self.config["data"]["label_dict"])
         self.pred_decoder = ManyHotEncoder(
-            list(classes_labels.keys()),
+            list(self.classes_labels.keys()),
             audio_len=self.config["data"]["audio_max_len"],
             frame_len=self.config["feats"]["n_filters"],
             frame_hop=self.config["feats"]["hop_length"],
             net_pooling=self.config["data"]["net_subsample"],
             fs=self.config["data"]["fs"],
         )
+        # 使用一个bool来开启CrossEntropyLoss，与MERT等finetune对齐
+        if  self.config["train"]["loss"] == 'ce':
+            if self.multi_label:
+                raise Exception('同一个frame多标签的情况下，不能使用CrossEntropyLoss. 这是在datasets.__init__里定义的')
+            self.use_ce_loss = True
+            self.loss_fn = torch.nn.CrossEntropyLoss()
+            print("Using CrossEntropyLoss...")
+            self.test_psds_buffer = {0: pd.DataFrame()}  # 只用一个0作为替代
+            self.test_results = {'filenames': [], 'predictions': []} # 存储所有predictions
+        else:
+            self.use_ce_loss = False
+            self.loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([5.0, 2.0, 10.0, 5.0, 2.0, 1.5, 1.5, 1.0]))
+            print("Using BCEWithLogitsLoss...")
+            test_n_thresholds = 50
+            test_thresholds = np.arange(
+                1 / (test_n_thresholds * 2), 1, 1 / test_n_thresholds
+            )
+            self.test_psds_buffer = {k: pd.DataFrame() for k in test_thresholds}
+            self.decoded_05_buffer = pd.DataFrame()
+            self.decoded_025_buffer = pd.DataFrame()
 
         # buffer for event based scores which we compute using sed-eval
         self.median_filter = MedianPool2d(7, same=True)
         self.sed_metrics_student = SEDMetrics(intersection_thd=0.5)
-        
-        test_n_thresholds = 50
-        test_thresholds = np.arange(
-            1 / (test_n_thresholds * 2), 1, 1 / test_n_thresholds
-        )
-        self.test_psds_buffer = {k: pd.DataFrame() for k in test_thresholds}
-        self.decoded_05_buffer = pd.DataFrame()
-        self.decoded_025_buffer = pd.DataFrame()
+
         self.lr_scale = lr_scale
 
     def training_step(self, batch, batch_idx):        
@@ -118,18 +133,34 @@ class FineTuningPLModule(LightningModule):
             self.encoder.finetune_mannual_train()
         self.schedule()
         x, labels, _ = batch
-
         x, labels = self.encoder((x, labels))
 
-        strong_pred = self.head(x)
-        labels = labels.transpose(1, 2)
-        # 这里把pred和labels统一成(batch_size, time, num_classes), 默认类别是最后一个维度，就可以使用pos_weight=tensor(num_classes)
+        strong_pred = self.head(x) # Linear head contains transpose[1,2]
 
         # Get weak label for real data
-        strong_loss = self.loss_fn(strong_pred, labels)
+        strong_loss = self._calculate_loss(strong_pred, labels)
         self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"], prog_bar=True, logger=True)
         self.log("train/strong_loss", strong_loss)
         return strong_loss
+
+    def _calculate_loss(self, strong_pred, labels):
+        # 输入的strong_pred, labels: [bsz, cls, T][64, 9, 250]
+        # 这里把pred和labels统一成(bsz, T, cls), 默认类别是最后一个维度，就可以使用pos_weight=tensor(num_classes)
+        strong_pred, labels = strong_pred.transpose(1,2), labels.transpose(1, 2) # [bsz, T, cls][64, 250, 9]
+        if not self.use_ce_loss:   # 源代码默认使用bce loss
+            return self.loss_fn(strong_pred, labels)
+
+        # 以下是要用CrossEntropyLoss需要做的改动
+        # 转化shape: (64, 250, 9) ---> (64, 250) 在ASStrongDataset中使用的是ManyHotEncoder, init确认过了不是multilabel
+        targets_single_label = labels.argmax(dim=-1)  # (64, 250)，在label_dict里，所有的label都是1～8，当都是0的时候，返回的就是第一个index正好对应0无标签
+        #targets_single_label[labels.sum(dim=-1) == 0] = 0  # 设置为0的时间步表示无标签
+        # 展平 logits(strong_pred) 和 targets (labels)
+        _B, _T, C = strong_pred.shape
+        assert C==self.num_labels
+        logits_flat = strong_pred.view(-1, C)  # shape: (64 * 250, 9)
+        targets_flat = targets_single_label.view(-1)  # shape: (64 * 250,)
+
+        return self.loss_fn(logits_flat, targets_flat)  # return CrossEntropyLoss
 
     def schedule(self):
         for i, param_group in enumerate(self.trainer.optimizers[0].param_groups):
@@ -145,14 +176,13 @@ class FineTuningPLModule(LightningModule):
         x, labels, filenames = batch
         x, labels = self.encoder((x, labels))
 
-        strong_pred = self.head(x)
-        labels = labels.transpose(1, 2) # 同training_step()
-        loss_strong_student = self.loss_fn(
-            strong_pred, labels
-        )
-        self.val_loss.append(loss_strong_student.item())
-        decoded_student_strong = decode_preds(strong_pred, [0.5], self.median_filter)
+        strong_pred = self.head(x) # [bsz, cls, T] [64, 9, 250]
+        # 先计算metrics，因为后面loss计算需要reshape
+        decoded_student_strong = onehot_decode_preds(strong_pred, [0], self.median_filter)
         self.sed_metrics_student.accm_macro_f1(decoded_student_strong, labels)
+
+        loss_strong_student = self._calculate_loss(strong_pred, labels)
+        self.val_loss.append(loss_strong_student.item())
 
     def on_validation_epoch_end(self):
         # synth dataset
@@ -170,32 +200,37 @@ class FineTuningPLModule(LightningModule):
         x, labels, filenames = batch
         x, labels = self.encoder((x, labels))
 
-        strong_pred = self.head(x)
-        labels = labels.transpose(1, 2)  # 同training_step()
-        # Get weak label for real data
-        test_loss = self.loss_fn(strong_pred, labels)
-        
+        strong_pred = self.head(x)  # [bsz, cls, T] [64, 9, 250]
+
+        # 计算loss
+        test_loss = self._calculate_loss(strong_pred, labels)
         self.log("test/real/strong_loss", test_loss, prog_bar=True, logger=True)
+
         # Compute PSDS (Different from F1 metric, PSDS computes the ROC, which requires various thresholds from 0 to 1.)
-        strong_pred = strong_pred.transpose(1, 2)  # 这里再交换一次num_class和time的维度，因为原始代码是按照(bsz, cls, T)进行的后面decode的运算。但是为了计算loss，必须把cls维度放最后。
-        decoded_strong = gpu_decode_preds(
-            strong_pred, 
+        # 在每一步test_step不能直接decode，原因是要对截成10s的片段进行合并结果，这一步只能先保存，最后test_epoch_end再合并+decode
+        self.test_results['filenames'].extend(filenames)
+        self.test_results['predictions'].append(strong_pred)
+
+        decoded_strong = onehot_gpu_decode_preds(
+            strong_pred,
             thresholds=list(self.test_psds_buffer.keys()),
             filenames=filenames,
-            encoder=self.pred_decoder, 
+            encoder=self.pred_decoder,
             median_filter=self.median_filter
         )
-        for th in self.test_psds_buffer.keys():
-            self.test_psds_buffer[th] = pd.concat([self.test_psds_buffer[th], decoded_strong[th]], ignore_index=True)
-        # Compute F1 metric
-        mid_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 2]
-        self.decoded_05_buffer = pd.concat([self.decoded_05_buffer, decoded_strong[mid_val]], ignore_index=True)
-        # use other values instead of mid_val
-        quarter_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
-        self.decoded_025_buffer = pd.concat([self.decoded_025_buffer, decoded_strong[quarter_val]], ignore_index=True)
+        # for th in self.test_psds_buffer.keys():
+        #     self.test_psds_buffer[th] = pd.concat([self.test_psds_buffer[th], decoded_strong[th]], ignore_index=True)
+        # # Compute F1 metric
+        # if not self.use_ce_loss:
+        #     mid_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 2]
+        #     self.decoded_05_buffer = pd.concat([self.decoded_05_buffer, decoded_strong[mid_val]], ignore_index=True)
+        #     # use other values instead of mid_val
+        #     quarter_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
+        #     self.decoded_025_buffer = pd.concat([self.decoded_025_buffer, decoded_strong[quarter_val]],ignore_index=True)
         return
 
     def on_test_epoch_end(self) -> None:
+        # 只保存预测结果csv，评价指标的计算统一到utils_ccom_eval/evaluation.py，与其他方法一起做对比
         save_dir = os.path.join(self.metric_save_dir, "metrics_test")
         os.makedirs(save_dir, exist_ok=True)
         # calculate the metrics
@@ -203,58 +238,83 @@ class FineTuningPLModule(LightningModule):
         evaluation.g_parallel=True
         psds.g_parallel=True
 
-        # save self.decoded_buffer as tsv file
-        self.decoded_05_buffer.to_csv(os.path.join(save_dir, "pred_0.5.csv"), index=False)
-        self.decoded_025_buffer.to_csv(os.path.join(save_dir, "pred_0.25.csv"), index=False)
-        intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
-            {"0.5": self.decoded_05_buffer},
-            self.config["data"]["test_tsv"],
-            self.config["data"]["test_dur"],
-        )
-        print("Intersection F1:", intersection_f1_macro)
-        print("Intersection F1 per category:", f_dict)
-        
-        psds_score_scenario1 = compute_psds_from_operating_points(
-            self.test_psds_buffer,
-            self.config["data"]["test_tsv"],
-            self.config["data"]["test_dur"],
-            dtc_threshold=0.7,
-            gtc_threshold=0.7,
-            alpha_ct=0,
-            alpha_st=0.0,
-            save_dir=os.path.join(save_dir, "scenario1"),
-            weighted=False,
-        )
-        psds_score_scenario2 = compute_psds_from_operating_points(
-            self.test_psds_buffer,
-            self.config["data"]["test_tsv"],
-            self.config["data"]["test_dur"],
-            dtc_threshold=0.1,
-            gtc_threshold=0.1,
-            cttc_threshold=0.3,
-            alpha_ct=0.5,
-            alpha_st=0.0,
-            save_dir=os.path.join(save_dir, "scenario2"),
-            weighted=False,
-        )
+        # save self.decoded_buffer as tsv file, remove NA
+        if not self.use_ce_loss:
+            self.decoded_05_buffer.to_csv(os.path.join(save_dir, "pred_0.5.csv"), index=False)
+            self.decoded_025_buffer.to_csv(os.path.join(save_dir, "pred_0.25.csv"), index=False)
+            print(f"Saved pred_0.5.csv, pred_0.25.csv to {save_dir}.")
 
+            # intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
+            #     {"0.5": self.decoded_05_buffer},
+            #     self.config["data"]["test_tsv"],
+            #     self.config["data"]["test_dur"],
+            # )
+        else:
+            write_results(filenames=self.test_results['filenames'], predictions=self.test_results['predictions'],
+                          save_dir=save_dir, encoder=self.encoder, labels_list=list(self.classes_labels.keys()))
 
-        best_test_result = torch.tensor(max(psds_score_scenario1, psds_score_scenario2))
+            # merge_preds = torch.cat(self.test_results["predictions"], dim=0)  # 在第一个batch的维度拼接起来
+            # sample_size, C, T = merge_preds.shape
+            # assert sample_size == len(self.test_results["filenames"])
+            # print('predictions after merge: ', merge_preds.shape)
+            # print(self.test_results["filenames"])
 
-        results = {
-            "hp_metric": best_test_result,
-            "test/real/psds_score_scenario1": psds_score_scenario1,
-            "test/real/psds_score_scenario2": psds_score_scenario2,
-            # "test/real/event_f1_macro": event_F1_macro * 100, # omit computing EBF1, takes to much time!
-            "test/real/intersection_f1_macro": intersection_f1_macro * 100,
-        }
-        print(results)
-        if self.logger is not None:
-                self.logger.log_metrics(results)
-                self.logger.log_hyperparams(self.config, results)
+            # assert list(self.test_psds_buffer.keys()) == [0]
+            # df = self.test_psds_buffer[0]
+            # df_cleaned = df[df['event_label'] != 'NA']
+            # df_cleaned.to_csv(os.path.join(save_dir, "pred_0.csv"), index=False)
+            # print(f"Saved pred_0.csv to {save_dir}.")
 
-        for key in results.keys():
-            self.log(key, results[key], prog_bar=True, logger=False)
+            # intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
+            #     {"0": df_cleaned},
+            #     self.config["data"]["test_tsv"],
+            #     self.config["data"]["test_dur"],
+            # )
+
+        # print("Intersection F1:", intersection_f1_macro)
+        # print("Intersection F1 per category:", f_dict)
+        #
+        # psds_score_scenario1 = compute_psds_from_operating_points(
+        #     self.test_psds_buffer,
+        #     self.config["data"]["test_tsv"],
+        #     self.config["data"]["test_dur"],
+        #     dtc_threshold=0.7,
+        #     gtc_threshold=0.7,
+        #     alpha_ct=0,
+        #     alpha_st=0.0,
+        #     save_dir=os.path.join(save_dir, "scenario1"),
+        #     weighted=False,
+        # )
+        # psds_score_scenario2 = compute_psds_from_operating_points(
+        #     self.test_psds_buffer,
+        #     self.config["data"]["test_tsv"],
+        #     self.config["data"]["test_dur"],
+        #     dtc_threshold=0.1,
+        #     gtc_threshold=0.1,
+        #     cttc_threshold=0.3,
+        #     alpha_ct=0.5,
+        #     alpha_st=0.0,
+        #     save_dir=os.path.join(save_dir, "scenario2"),
+        #     weighted=False,
+        # )
+        #
+        #
+        # best_test_result = torch.tensor(max(psds_score_scenario1, psds_score_scenario2))
+        #
+        # results = {
+        #     "hp_metric": best_test_result,
+        #     "test/real/psds_score_scenario1": psds_score_scenario1,
+        #     "test/real/psds_score_scenario2": psds_score_scenario2,
+        #     # "test/real/event_f1_macro": event_F1_macro * 100, # omit computing EBF1, takes to much time!
+        #     "test/real/intersection_f1_macro": intersection_f1_macro * 100,
+        # }
+        # print(results)
+        # if self.logger is not None:
+        #         self.logger.log_metrics(results)
+        #         self.logger.log_hyperparams(self.config, results)
+        #
+        # for key in results.keys():
+        #     self.log(key, results[key], prog_bar=True, logger=False)
 
     def configure_optimizers(self):
         # Freezing opt

@@ -1,0 +1,216 @@
+import os.path
+import pickle
+
+import librosa
+import torch
+import numpy as np
+
+from audiossl.datasets.as_strong_utils.as_strong_dict import get_lab_dict
+from audiossl.datasets.dcase_utils import ManyHotEncoder
+from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
+    onehot_decode_merge_preds,
+    MedianPool2d
+)
+
+########### TODO: 将下面参数改成从frame_40.yaml中读取
+SR = 16000
+WINDOW_SIZE = 10
+STRIDE = 5
+NUM_LABELS = 9
+HOP_LEN = 160
+
+def write_results(filenames, predictions, save_dir, labels_list, encoder: ManyHotEncoder):
+    '''
+    copy from hubert/src/my_train.py write_results
+    filenames: a list of all filenames with full path
+    predictions: concatenation of [bsz, cls, T]
+    '''
+    # merge results to original songs and write as independent files
+    merge_preds = torch.cat(predictions, dim=0) # 在第一个batch的维度拼接起来
+    sample_size, C, T = merge_preds.shape
+    assert sample_size == len(filenames)
+    logits = merge_preds.transpose(1,2) # 变成[sample_size, T, C]，
+    probs = torch.softmax(logits, dim=-1)
+    file_params = {'file': [], 'start': [], 'end': []}
+
+    for filename in filenames:
+        file_name_no_suffix = os.path.splitext(os.path.basename(filename))[0]
+        name_parts = file_name_no_suffix.split('_')
+        start_time = int(name_parts[-2])
+        end_time = int(name_parts[-1])
+        source_file_name_no_suffix = '_'.join(name_parts[:-2])
+        file_params['file'].append(source_file_name_no_suffix)
+        file_params['start'].append(start_time)
+        file_params['end'].append(end_time)
+
+    results_list = [
+        {
+            'audio_id': file,
+            'start': start,
+            'end': end,
+            'probs': probs
+        } for (file, start, end, probs) in zip(
+            file_params['file'], file_params['start'], file_params['end'], probs
+        )
+    ]
+    results = dict()
+    for item in results_list:
+        # 把每一首的所有片段放在同一个id下，形成一个list
+        results[item['audio_id']] = results.get(item['audio_id'], list()) + [item]
+
+    with open(os.path.join(save_dir, 'results.pickle'), 'wb') as handle:
+        pickle.dump(results, handle)
+
+    decode_results(save_dir, labels_list)
+
+def decode_results(save_dir, pred_decoder, median_filter):
+    with open(os.path.join(save_dir, 'results.pickle'), 'rb') as handle:
+        results = pickle.load(handle)
+
+    save_pred_dir = os.path.join(save_dir, 'predictions')
+    for filename in results:
+        probs = collect_and_avg(results[filename], pred_decoder)
+        dummy_threshold = 0    # 使用源代码的逻辑，这里的key是threshold，传入的是[0]
+        decoded_strong = onehot_decode_merge_preds(
+            probs,
+            thresholds=[dummy_threshold],
+            filenames=[filename],
+            encoder=pred_decoder,
+            median_filter=median_filter
+        )
+        df = decoded_strong[dummy_threshold].sort_values('onset')
+        df_cleaned = df[df['event_label'] != 'NA']
+        df_cleaned.to_csv(os.path.join(save_pred_dir, filename + '.csv'), index=False)
+
+        # labels = plain_decode(probs)
+        # plain_text = interprete(labels, labels_list)
+        #
+        # predictions_folder = os.path.join(save_dir, 'predictions/')
+        # os.makedirs(predictions_folder, exist_ok=True)
+        # with open(os.path.join(predictions_folder, key + '.csv'), 'w') as f:
+        #     f.write('label,start,end\n')
+        #     for label, start, end in plain_text:
+        #         if label != 'NA':
+        #             f.write(f'{label},{start},{end}\n')
+        # save framewise
+        # np.save(os.path.join(save_pred_dir, key + '.framewise.npy'), probs.argmax(-1).numpy())
+
+def collect_and_avg(result_dicts, pred_decoder:ManyHotEncoder):
+    '''
+    crop out results to window_size
+    stack and avg results wrt stride
+    '''
+    time_ranges = [[item['start'], item['end']] for item in result_dicts]
+    #idx_ranges = [[int(pred_decoder._time_to_frame(value)) for value in row] for row in time_ranges]
+
+    # 1. 确定全局时间范围
+    global_start = min(start for start, end in time_ranges)
+    global_end = max(end for start, end in time_ranges)
+    global_length = pred_decoder.time_to_frame(global_end - global_start)
+
+    # 2. 初始化结果张量和计数张量
+    result = torch.zeros(global_length, NUM_LABELS)
+    count = torch.zeros(global_length, dtype=torch.int32)
+
+    # 3. 累加张量并记录计数
+    for i, result_dict in enumerate(sorted(result_dicts, key=lambda x: x['start'])):
+        start_idx = pred_decoder.time_to_frame(result_dict['start'] - global_start)
+        end_idx = pred_decoder.time_to_frame(result_dict['end'] - global_start)
+        result[start_idx:end_idx] += result_dict['probs'].cpu()
+        count[start_idx:end_idx] += 1
+
+    # 4. 计算平均值，避免除以零
+    count = count.unsqueeze(1)  # 形状扩展为 [global_length, 1] 以便广播
+    result = result / count.clamp(min=1)  # 防止被零除
+
+    return result
+
+def plain_decode(probs):
+    '''
+    probs -> label
+    without any post-processing decoding technique
+    also: auto aggregate
+    '''
+    label = probs.argmax(-1).numpy()
+    results = [[label[0], 0, 1]]
+    for i, l in enumerate(label[1:], 1):
+        prevl, prev_start, prev_end = results[-1]
+        if prevl == l and prev_end == i:
+            # same label, next to each other
+            results[-1][-1] = i + 1
+        else:
+            # new event
+            results.append([l, i, i+1])
+    return results
+
+def interprete(labels, labels_list):
+    '''
+    label -> text
+    $labelname,$start,$end
+    '''
+    texts = list()
+    for (label_idx, start, end) in labels:
+        start, end = map(lambda x: librosa.frames_to_time(x, sr=SR, hop_length=320),[start, end])
+        texts.append([labels_list[label_idx], start, end])
+    return texts
+
+
+def debug_collect_and_avg():
+    w, s = 10, 5
+    total_len = 15
+    n_labels = 3
+    torch.set_printoptions(precision=2)
+    #probs = torch.zeros(total_len, n_labels)
+
+    prob1 = torch.rand(w, n_labels)
+    prob1 = prob1 / prob1.sum(dim=1, keepdim=True)
+    prob2 = torch.rand(w, n_labels)
+    prob2 = prob2 / prob2.sum(dim=1, keepdim=True)
+    print(prob1)
+    print(prob2)
+    sample_1 = {'audio_id': 'wav1', 'start': 0, 'end': 10, 'probs': prob1}
+    sample_2 = {'audio_id': 'wav2', 'start': 5, 'end': 15, 'probs': prob2}
+    time_ranges = [[0,10], [5,15]]
+    #result_dicts = [sample_1, sample_2]
+    tensors = [prob1, prob2]
+
+    # 1. 确定全局时间范围
+    global_start = min(start for start, end in time_ranges)
+    global_end = max(end for start, end in time_ranges)
+    global_length = global_end - global_start
+
+    # 2. 初始化结果张量和计数张量
+    num_classes = tensors[0].shape[1]
+    result = torch.zeros(global_length, num_classes)
+    count = torch.zeros(global_length, dtype=torch.int32)
+
+    # 3. 累加张量并记录计数
+    for tensor, (start, end) in zip(tensors, time_ranges):
+        start_idx = start - global_start
+        end_idx = end - global_start
+        result[start_idx:end_idx] += tensor
+        count[start_idx:end_idx] += 1
+
+    print(result)
+    # 4. 计算平均值，避免除以零
+    count = count.unsqueeze(1)  # 形状扩展为 [global_length, 1] 以便广播
+    result = result / count.clamp(min=1)  # 防止被零除
+    print('after averaging')
+    print(result)
+    print(result.sum(dim=1))
+    return result
+
+if __name__ == "__main__":
+    labels_list = list(get_lab_dict("/20A021/ccomhuqin_seg/meta/common_labels_na.txt").keys())
+    pred_decoder = ManyHotEncoder(
+        labels_list,
+        audio_len=10, #self.config["data"]["audio_max_len"],
+        frame_len=1024, #self.config["feats"]["n_filters"],
+        frame_hop=160, #self.config["feats"]["hop_length"],
+        net_pooling=4, #self.config["data"]["net_subsample"],
+        fs=16000, #self.config["data"]["fs"],
+    )
+    median_filter = MedianPool2d(7, same=True)
+    decode_results("/20A021/ccomhuqin_seg/save_path/onlytest/metrics_test",
+                  pred_decoder, median_filter)
+

@@ -6,7 +6,7 @@ from dcase_util.data import DecisionEncoder
 from pathlib import Path
 
 class ManyHotEncoder:
-    """"
+    """
         Adapted after DecisionEncoder.find_contiguous_regions method in
         https://github.com/DCASE-REPO/dcase_util/blob/master/dcase_util/data/decisions.py
 
@@ -70,6 +70,11 @@ class ManyHotEncoder:
         samples = time * self.fs
         frame = (samples) / self.frame_hop
         return np.clip(frame / self.net_pooling, a_min=0, a_max=self.n_frames)
+
+    def time_to_frame(self, time):
+        samples = time * self.fs
+        frame = (samples) / self.frame_hop
+        return int(frame / self.net_pooling)
 
     def _frame_to_time(self, frame):
         frame = frame * self.net_pooling / (self.fs / self.frame_hop)

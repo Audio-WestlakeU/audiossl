@@ -24,23 +24,15 @@ def generate_pred_tsv_yolo():
         df = pd.concat([df, pd.DataFrame(item_dict)], ignore_index=True)
     df.to_csv(pred_path+"/all.tsv", index=False, sep="\t")
 
-def generate_pred_tsv_mert(pred_path):
-    df = pd.DataFrame([], columns=["filename", "onset", "offset", "event_label", "conf"])
+def generate_pred_tsv_atst(pred_path, save_path):
+    df_all = pd.DataFrame([], columns=["filename", "onset", "offset", "event_label"])
     for csv_path in os.listdir(pred_path):
+        csv_path = os.path.join(pred_path, csv_path)
         if not csv_path.endswith('.csv'):
             print(f"{csv_path} is not csv file.")
             continue
-        full_path = os.path.join(pred_path, csv_path)
-        item_df = pd.read_csv(full_path)
-        audio_file = full_path.replace(".csv", ".wav")
-        item_dict ={
-               "filename": np.full(item_df.shape[0], audio_file),
-               "onset": item_df['start'].values,
-               "offset": item_df['end'].values,
-               "event_label": item_df['label'].values
-        }
-        df = pd.concat([df, pd.DataFrame(item_dict)], ignore_index=True)
-    df.to_csv(pred_path+"/all.tsv", index=False, sep="\t")
+        df_all = pd.concat([df_all, pd.read_csv(csv_path)], ignore_index=True)
+    df_all.to_csv(save_path+"/pred_all.csv", index=False)
 
 def match_filename_with_gt(pred_path, gt_path = "/20A021/ccomhuqin/data/eval/"):
     pred_df = pd.read_csv(pred_path+"/all.tsv", sep="\t")
@@ -57,7 +49,6 @@ def remove_DTG(pred_tsv_path):
 def compute_metrics(threshold, pred_csv, save_path=None):
     import json
     pred_df = pd.read_csv(pred_csv)
-
 
     # threshold is different for different models. Choose 0.25 for yolo
     # Mert use single-label cross_entropy prediction loss, no threshold.
@@ -76,20 +67,45 @@ def compute_metrics(threshold, pred_csv, save_path=None):
             data.writelines("Fscore_per_class:")
             data.write(json.dumps(f_per_class_th, allow_nan=True))
 
+def rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur):
+    df = pd.read_csv(test_tsv, sep="\t")
+    df['filename'] = df['filename'].apply(lambda x: x.split('/')[-1].split('.')[0])
+    df.to_csv(save_test_tsv, index=False, sep='\t')
+
+    df = pd.read_csv(test_dur, sep="\t")
+    df['filename'] = df['filename'].apply(lambda x: x.split('/')[-1].split('.')[0])
+    df.to_csv(save_test_dur, index=False, sep='\t')
+
+def check_pred_match_gt(pred_csv, gt_tsv, gt_duration_tsv):
+    pred_filenames = set(pd.read_csv(pred_csv)['filename'])
+    gt_filenames = set(pd.read_csv(gt_tsv, sep='\t')['filename'])
+    gt_duration_filenames = set(pd.read_csv(gt_duration_tsv, sep='\t')['filename'])
+    assert pred_filenames == gt_filenames
+    assert gt_filenames == gt_duration_filenames
+
 
 if __name__ == "__main__":
-    #generate_pred_tsv_mert(pred_path = "/20A021/compare_with/mert/results_1227")
     #----------------ATST-----------------------
-    test_tsv = "/20A021/ccomhuqin_seg/meta/eval/eval_rm_intersect.tsv"
-    test_dur = "/20A021/ccomhuqin_seg/meta/eval/eval_durations.tsv"
-    metrics_dir = "/20A021/ccomhuqin_seg/save_path/finetune-all/finetune0924-BCEWithLogitsLoss/pos-weight=tensor/metrics_test/"
-    compute_metrics(threshold=0.25, pred_csv=metrics_dir + "pred_0.25.csv", save_path=metrics_dir)
+    metrics_dir = "/20A021/ccomhuqin_seg/save_path/onlytest/metrics_test/"
+    test_tsv = os.path.join(metrics_dir, 'gt', 'eval_rm_intersect.tsv')
+    test_dur = os.path.join(metrics_dir, 'gt', 'eval_durations.tsv')
+
+    # 这些代码只跑一遍
+    #predictions_dir = os.path.join(metrics_dir, 'predictions')
+    #generate_pred_tsv_atst(pred_path=predictions_dir)
+    # rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur)
+
+    check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=test_tsv, gt_duration_tsv=test_dur)
+    compute_metrics(threshold=0, pred_csv=metrics_dir+"pred_all.csv", save_path=metrics_dir)
 
     #---------------MERT-------------------
+    # generate_pred_tsv(pred_path ="/20A021/compare_with/mert/results_1227")
     # test_tsv = "/20A021/ccomhuqin/meta/eval/eval_rm_intersect.tsv"
     # test_dur = "/20A021/ccomhuqin/meta/eval/eval_durations.tsv"
     # metrics_dir = "/20A021/compare_with/mert/results_1227/"
     # compute_metrics(threshold=0.5, pred_csv=metrics_dir + "remove_DTG_all.csv")
+
+
 
 
 
