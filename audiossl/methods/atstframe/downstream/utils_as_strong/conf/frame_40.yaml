@@ -1,12 +1,12 @@
 data: # change with your paths if different.
-  strong_folder: "/20A021/ccomhuqin_seg/data/train/"
-  strong_folder_44k: "/20A021/ccomhuqin_seg/data/train/"
-  strong_train_tsv:  "/20A021/ccomhuqin_seg/meta/train/train_rm_intersect.tsv"
-  strong_val_tsv: "/20A021/ccomhuqin_seg/meta/val/val_rm_intersect.tsv"
-  test_folder: "/20A021/finetune_music_dataset/test/"
+  strong_folder: "/20A021/ccomhuqin_seg/data/train/" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
+  strong_folder_44k: ""
+  strong_train_tsv:  "/20A021/ccomhuqin_seg/meta/train/train_common.tsv"
+  strong_val_tsv: "/20A021/ccomhuqin_seg/meta/val/val_common.tsv"
+  test_folder: "/20A021/ccomhuqin_seg/data/eval/" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
   test_folder_44k: ""
-  test_tsv: "/20A021/ccomhuqin_seg/meta/eval/eval_rm_intersect.tsv"
-  test_dur: "/20A021/ccomhuqin_seg/meta/eval/eval_durations.tsv"
+  test_tsv: "/20A021/ccomhuqin_seg/meta/eval/eval_common.tsv"
+  test_dur: "/20A021/ccomhuqin_seg/meta/eval/eval_duration.tsv"
   label_dict: "/20A021/ccomhuqin_seg/meta/common_labels_na.txt"
   audio_max_len: 10
   fs: 16000

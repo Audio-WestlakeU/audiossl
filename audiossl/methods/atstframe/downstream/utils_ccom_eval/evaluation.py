@@ -46,14 +46,14 @@ def remove_DTG(pred_tsv_path):
     print("Remove label entries: ", pred_df.shape[0] - df.shape[0])
     df.to_csv(pred_tsv_path.replace('.csv', '_remove_DTG.csv'), index=False)
 
-def compute_metrics(threshold, pred_csv, save_path=None):
+def compute_metrics(threshold, pred_csv, gt_tsv, gt_dur, save_path=None):
     import json
     pred_df = pd.read_csv(pred_csv)
 
     # threshold is different for different models. Choose 0.25 for yolo
     # Mert use single-label cross_entropy prediction loss, no threshold.
     psds_metrics_mean, p_per_class_th, r_per_class_th, f_per_class_th = compute_per_intersection_metrics(
-        {threshold: pred_df}, test_tsv, test_dur
+        {threshold: pred_df}, gt_tsv, gt_dur
     )
     if save_path is not None:
         with open(save_path + f'/results_metrics_{threshold}.txt', 'w') as data:
@@ -86,17 +86,21 @@ def check_pred_match_gt(pred_csv, gt_tsv, gt_duration_tsv):
 
 if __name__ == "__main__":
     #----------------ATST-----------------------
-    metrics_dir = "/20A021/ccomhuqin_seg/save_path/onlytest/metrics_test/"
-    test_tsv = os.path.join(metrics_dir, 'gt', 'eval_rm_intersect.tsv')
-    test_dur = os.path.join(metrics_dir, 'gt', 'eval_durations.tsv')
+    metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1231/metrics_test/"
+    # test_tsv = "/20A021/ccomhuqin/meta/eval/eval_rm_intersect.tsv"
+    # test_dur = "/20A021/ccomhuqin/meta/eval/eval_duration.tsv"
+    save_test_tsv = "/20A021/finetune_music_dataset/exp/audiossl/eval_rm_intersect.tsv"
+    save_test_dur = "/20A021/finetune_music_dataset/exp/audiossl/eval_duration.tsv"
+    #rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur)
 
     # 这些代码只跑一遍
-    #predictions_dir = os.path.join(metrics_dir, 'predictions')
-    #generate_pred_tsv_atst(pred_path=predictions_dir)
-    # rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur)
+    predictions_dir = os.path.join(metrics_dir, 'predictions')
+    generate_pred_tsv_atst(pred_path=predictions_dir, save_path=metrics_dir)
 
-    check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=test_tsv, gt_duration_tsv=test_dur)
-    compute_metrics(threshold=0, pred_csv=metrics_dir+"pred_all.csv", save_path=metrics_dir)
+    #check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=save_test_tsv, gt_duration_tsv=save_test_dur)
+    compute_metrics(threshold=0, pred_csv=metrics_dir+"pred_all.csv",
+                    gt_tsv=save_test_tsv, gt_dur=save_test_dur,
+                    save_path=metrics_dir)
 
     #---------------MERT-------------------
     # generate_pred_tsv(pred_path ="/20A021/compare_with/mert/results_1227")

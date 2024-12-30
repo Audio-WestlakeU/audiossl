@@ -109,7 +109,7 @@ def run(dict_args, pretrained_module):
         # limit_test_batches=5,
     )
     last_ckpt = os.path.join(save_path, "last.ckpt")
-    if test_ckpt is None:
+    if test_ckpt == "":
         trainer.fit(model, datamodule=data,
                     ckpt_path=last_ckpt if os.path.exists(last_ckpt) else None)
     else:

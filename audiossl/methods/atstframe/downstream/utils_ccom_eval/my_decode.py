@@ -19,7 +19,7 @@ STRIDE = 5
 NUM_LABELS = 9
 HOP_LEN = 160
 
-def write_results(filenames, predictions, save_dir, labels_list, encoder: ManyHotEncoder):
+def write_results(filenames, predictions, save_dir):
     '''
     copy from hubert/src/my_train.py write_results
     filenames: a list of all filenames with full path
@@ -61,13 +61,14 @@ def write_results(filenames, predictions, save_dir, labels_list, encoder: ManyHo
     with open(os.path.join(save_dir, 'results.pickle'), 'wb') as handle:
         pickle.dump(results, handle)
 
-    decode_results(save_dir, labels_list)
+    #decode_results(save_dir, labels_list)
 
 def decode_results(save_dir, pred_decoder, median_filter):
     with open(os.path.join(save_dir, 'results.pickle'), 'rb') as handle:
         results = pickle.load(handle)
 
     save_pred_dir = os.path.join(save_dir, 'predictions')
+    os.makedirs(save_pred_dir, exist_ok=False)
     for filename in results:
         probs = collect_and_avg(results[filename], pred_decoder)
         dummy_threshold = 0    # 使用源代码的逻辑，这里的key是threshold，传入的是[0]
@@ -155,51 +156,6 @@ def interprete(labels, labels_list):
     return texts
 
 
-def debug_collect_and_avg():
-    w, s = 10, 5
-    total_len = 15
-    n_labels = 3
-    torch.set_printoptions(precision=2)
-    #probs = torch.zeros(total_len, n_labels)
-
-    prob1 = torch.rand(w, n_labels)
-    prob1 = prob1 / prob1.sum(dim=1, keepdim=True)
-    prob2 = torch.rand(w, n_labels)
-    prob2 = prob2 / prob2.sum(dim=1, keepdim=True)
-    print(prob1)
-    print(prob2)
-    sample_1 = {'audio_id': 'wav1', 'start': 0, 'end': 10, 'probs': prob1}
-    sample_2 = {'audio_id': 'wav2', 'start': 5, 'end': 15, 'probs': prob2}
-    time_ranges = [[0,10], [5,15]]
-    #result_dicts = [sample_1, sample_2]
-    tensors = [prob1, prob2]
-
-    # 1. 确定全局时间范围
-    global_start = min(start for start, end in time_ranges)
-    global_end = max(end for start, end in time_ranges)
-    global_length = global_end - global_start
-
-    # 2. 初始化结果张量和计数张量
-    num_classes = tensors[0].shape[1]
-    result = torch.zeros(global_length, num_classes)
-    count = torch.zeros(global_length, dtype=torch.int32)
-
-    # 3. 累加张量并记录计数
-    for tensor, (start, end) in zip(tensors, time_ranges):
-        start_idx = start - global_start
-        end_idx = end - global_start
-        result[start_idx:end_idx] += tensor
-        count[start_idx:end_idx] += 1
-
-    print(result)
-    # 4. 计算平均值，避免除以零
-    count = count.unsqueeze(1)  # 形状扩展为 [global_length, 1] 以便广播
-    result = result / count.clamp(min=1)  # 防止被零除
-    print('after averaging')
-    print(result)
-    print(result.sum(dim=1))
-    return result
-
 if __name__ == "__main__":
     labels_list = list(get_lab_dict("/20A021/ccomhuqin_seg/meta/common_labels_na.txt").keys())
     pred_decoder = ManyHotEncoder(
@@ -211,6 +167,6 @@ if __name__ == "__main__":
         fs=16000, #self.config["data"]["fs"],
     )
     median_filter = MedianPool2d(7, same=True)
-    decode_results("/20A021/ccomhuqin_seg/save_path/onlytest/metrics_test",
+    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1231/metrics_test/",
                   pred_decoder, median_filter)
 

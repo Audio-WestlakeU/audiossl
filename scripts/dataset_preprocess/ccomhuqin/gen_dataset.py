@@ -42,7 +42,7 @@ def split2segments(audio_path, save_path):
 
     intresserad = dict()
     for (onset, duration, label) in zip(
-            *map(annotation.get, ['onset', 'duration', 'PT1-1'])):
+            *map(annotation.get, ['onset', 'duration', event_label_col])):
         if not pd.isnull(label):
             intresserad[(onset, duration)] = label
 
@@ -73,6 +73,27 @@ def split2segments(audio_path, save_path):
             label_timelist.append([new_filename, new_onset, new_offset, label])
     return label_timelist
 
+def check_onset_offset(min_label_sec, annotation_tsv):
+    print(annotation_tsv)
+    df = pd.read_csv(annotation_tsv, sep='\t')
+    print(f'original len(df) is {len(df)}')
+    for index, row in df.iterrows():
+        onset_sec, offset_sec = round(row['onset'], 3), round(row['offset'], 3)
+        # 先检查 onset<offset
+        if onset_sec >= offset_sec:
+            print('after round to 3, onset>offset', row)
+            df = df.drop(index)
+        else:
+            # 再检查duration > min_label_sec
+            duration = offset_sec - onset_sec
+            if duration < min_label_sec:
+                print(f'duration is less than {min_label_sec}s', duration, onset_sec, offset_sec,
+                      row['event_label'], row['filename'])
+                df = df.drop(index)
+    print(f'after removal len(df) is {len(df)}')
+    print(f'Save to {annotation_tsv}')
+    df.to_csv(annotation_tsv, sep='\t', index=False)
+
 def get_durations(meta_tsv, save_tsv):
     import soundfile as sf
     eval_meta = pd.read_csv(meta_tsv, delimiter="\t")
@@ -88,40 +109,62 @@ def gen_eval_tsv():
     all_annotation_count = 0
     audio_dir = "/20A021/ccomhuqin/data/eval"
     eval_meta_dir = "/20A021/ccomhuqin/meta/eval"
-    df = pd.DataFrame([], columns=["filename", "onset", "offset", "event_label"])
-
+    df = pd.DataFrame(columns=["filename", "onset", "offset", "event_label"])
 
     for fullpath in Path(audio_dir).glob('**/*.wav'):
         audio_path = str(fullpath)
         csv_path = audio_path.replace(".wav", ".csv")
         annotation = pd.read_csv(csv_path)
-        item_df = annotation[annotation['PT1-1'].notnull()]
+        item_df = annotation[annotation[event_label_col].notnull()]
         all_annotation_count += item_df.shape[0]
         print(f"current file {audio_path}, has {item_df.shape[0]} items. Total: {all_annotation_count} items.")
         item_dict ={"filename": np.full(item_df.shape[0], audio_path),
                "onset": item_df['onset'].values,
                "offset": item_df['onset'].values+item_df['duration'].values,
-               "event_label": item_df['PT1-1'].values}
+               "event_label": item_df[event_label_col].values}
         df = pd.concat([df, pd.DataFrame(item_dict)], ignore_index=True)
     df.to_csv(eval_meta_dir+"/eval.tsv", index=False, sep="\t")
 
     get_durations(eval_meta_dir+"/eval.tsv", eval_meta_dir+"/eval_durations.tsv")
 
 def gen_eval_seg_tsv():
-    generate_segment_dataset("/20A021/ccomhuqin/data/eval",
-                             "/20A021/ccomhuqin_seg/data/eval",
-                             "/20A021/ccomhuqin_seg/meta/eval/eval.tsv")
-    get_durations("/20A021/ccomhuqin_seg/meta/eval", max_len=10)
+    ori_data_dir = "/20A021/ccomhuqin/data/eval"
+    save_data_dir = ori_data_dir.replace('ccomhuqin', 'ccomhuqin_seg')
+    save_meta_tsv = "/20A021/ccomhuqin_seg/meta/eval/eval.tsv"
+    generate_segment_dataset(ori_data_dir, save_data_dir, save_meta_tsv)
+
+    save_meta_duration_tsv = "/20A021/ccomhuqin_seg/meta/eval/eval_duration.tsv"
+    get_durations(save_meta_tsv, save_meta_duration_tsv)
 
 
 if __name__ == "__main__":
     STRIDE = 5
     WINDOW_SIZE = 10
     TARGET_SR = 16000
-    ori_data_dir = "/20A021/ccomhuqin/data"
-    seg_data_dir = "/20A021/ccomhuqin_seg/data"
-    meta_dir = "/20A021/ccomhuqin/meta"
-    # generate_segment_dataset(ori_audio_dir=ori_data_dir + "/train",
-    #                          seg_audio_dir=seg_data_dir+"/train",
-    #                          save_meta=meta_dir+"/train/train.tsv")
-    gen_eval_seg_tsv()
+    event_label_col = 'PT1-2'
+    # 1. 生成10s的训练数据和验证数据
+    # ori_data_dir = "/20A021/ccomhuqin/data"
+    # seg_data_dir = "/20A021/ccomhuqin_seg/data"
+    # meta_dir = "/20A021/ccomhuqin_seg/meta"
+    #
+    # for str in ['train', 'val']:
+    #     save_meta = meta_dir + f"/{str}/{str}.tsv"
+    #     generate_segment_dataset(ori_audio_dir=ori_data_dir + f"/{str}",
+    #                              seg_audio_dir=seg_data_dir + f"/{str}",
+    #                              save_meta=save_meta)
+    #     get_durations(save_meta, meta_dir+f"/{str}/{str}_duration.tsv")
+
+    # 2. 生成10s的测试数据，用于inference
+    # gen_eval_seg_tsv()
+
+    # 3. 生成仅测试数据的ground_truth标注，用于计算metrics
+    # gen_eval_tsv()
+
+    # 4. 检查所有的标注技法的时长，为了排除错误标注和裁剪的问题
+    # min_label_sec = 0.04  # 据统计，最短的是DTG最短时长在0.04-0.05之间。其他小于0.04的大部分是有边缘裁剪，和手工错标。
+    # meta_tsvs = [#"/20A021/ccomhuqin_seg/meta/train/train.tsv",
+    #              #"/20A021/ccomhuqin_seg/meta/val/val.tsv",
+    #              #"/20A021/ccomhuqin_seg/meta/eval/eval.tsv",
+    #              "/20A021/ccomhuqin/meta/eval/eval.tsv"]
+    # for tsv in meta_tsvs:
+    #     check_onset_offset(min_label_sec, tsv)

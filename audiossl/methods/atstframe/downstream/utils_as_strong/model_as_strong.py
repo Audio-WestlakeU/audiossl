@@ -211,13 +211,13 @@ class FineTuningPLModule(LightningModule):
         self.test_results['filenames'].extend(filenames)
         self.test_results['predictions'].append(strong_pred)
 
-        decoded_strong = onehot_gpu_decode_preds(
-            strong_pred,
-            thresholds=list(self.test_psds_buffer.keys()),
-            filenames=filenames,
-            encoder=self.pred_decoder,
-            median_filter=self.median_filter
-        )
+        # decoded_strong = onehot_gpu_decode_preds(
+        #     strong_pred,
+        #     thresholds=list(self.test_psds_buffer.keys()),
+        #     filenames=filenames,
+        #     encoder=self.pred_decoder,
+        #     median_filter=self.median_filter
+        # )
         # for th in self.test_psds_buffer.keys():
         #     self.test_psds_buffer[th] = pd.concat([self.test_psds_buffer[th], decoded_strong[th]], ignore_index=True)
         # # Compute F1 metric
@@ -227,7 +227,7 @@ class FineTuningPLModule(LightningModule):
         #     # use other values instead of mid_val
         #     quarter_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
         #     self.decoded_025_buffer = pd.concat([self.decoded_025_buffer, decoded_strong[quarter_val]],ignore_index=True)
-        return
+        # return
 
     def on_test_epoch_end(self) -> None:
         # 只保存预测结果csv，评价指标的计算统一到utils_ccom_eval/evaluation.py，与其他方法一起做对比
@@ -251,14 +251,14 @@ class FineTuningPLModule(LightningModule):
             # )
         else:
             write_results(filenames=self.test_results['filenames'], predictions=self.test_results['predictions'],
-                          save_dir=save_dir, encoder=self.encoder, labels_list=list(self.classes_labels.keys()))
+                          save_dir=save_dir)
 
             # merge_preds = torch.cat(self.test_results["predictions"], dim=0)  # 在第一个batch的维度拼接起来
             # sample_size, C, T = merge_preds.shape
             # assert sample_size == len(self.test_results["filenames"])
             # print('predictions after merge: ', merge_preds.shape)
             # print(self.test_results["filenames"])
-
+            #
             # assert list(self.test_psds_buffer.keys()) == [0]
             # df = self.test_psds_buffer[0]
             # df_cleaned = df[df['event_label'] != 'NA']
