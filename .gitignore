@@ -8,3 +8,4 @@ ckpts
 logs
 .idea
 .DS_Store
+/temp_download

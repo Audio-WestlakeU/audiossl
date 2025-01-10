@@ -18,16 +18,17 @@ def plot_spec(x,save_path):
     plt.margins(0,0)
     #plt.xlabel('frequency',fontsize=20)
     #plt.ylabel('time',fontsize=20)
-    
-    plt.savefig(save_path,dpi=500,pad_inches=-0.01,transparent=True)
+
+    plt.savefig(save_path, bbox_inches='tight')
     plt.close()
 
 def plot_att(attentions,save_path,name):
     plot_spec(torch.sum(attentions[0,:,:,:],dim=0).cpu().numpy(),os.path.join(save_path,name+"att_headsum.png"))
     for i in range(attentions.shape[1]):
         plot_spec(attentions[0,i,:,:].cpu().numpy(),os.path.join(save_path,name+"att_head{}.png".format(i)))
+        attention_arr = attentions[0,i]
         plt.imsave(fname=os.path.join(save_path,name+"att_head{}_imsave.png".format(i)),
-                   arr=attentions[0,i].cpu().numpy(), 
+                   arr=attentions[0,i].cpu().numpy(), dpi=300,
                    format='png')
 
 def wav2mel(wav_file):
@@ -55,23 +56,25 @@ def get_pretraied_encoder(pretrained_ckpt_path):
     return pretrained_encoder
 
 def mel2att(mel,model):
-    return model.get_last_selfattention(mel[:,:,:101].unsqueeze(0))
+    return model.get_last_selfattention(mel.unsqueeze(0))
 
 
 if __name__ == "__main__":
-    import sys
-    wav_file,ckpt_path=sys.argv[1:]
-    save_path=os.path.dirname(ckpt_path)
-    print(ckpt_path,wav_file)
-    model = get_pretraied_encoder(ckpt_path)
-    mel = wav2mel(wav_file)
-    mel = mel[:,:,:101]
-    att = mel2att(mel,model)
+    wav_file = "/20A021/ccomhuqin_seg/data/train/低音板胡/串调1-1_0_10.wav"
 
-    os.makedirs(save_path,exist_ok=True)
+    ckpt_path="/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
+    save_path="/20A021/dataset_from_dyl/save_path/pretrainBase-0916/plot_attention/"
+    os.makedirs(save_path, exist_ok=True)
+    print(ckpt_path, wav_file)
 
-    plot_spec(mel[0].cpu().numpy(),os.path.join(save_path,"mel.png"))
-    print(len(att))
-	
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    mel = wav2mel(wav_file).to(device)
+    #mel = mel[:,:,:101]
+    #plot_spec(mel[0].cpu().numpy(),os.path.join(save_path,"mel.png"))
+
+    model = get_pretraied_encoder(ckpt_path).to(device)
+    att = mel2att(mel, model)
+    print("len of attention: ", len(att))
+
     for i,att_ in enumerate(att):
-    	plot_att(att_,save_path,name="{}-".format(i))
+        plot_att(att_, save_path, name="{}-".format(i))
