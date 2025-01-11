@@ -75,6 +75,7 @@ def old_implementation(seg_meta_path, labels_to_remove, single_eval_meta_tsv):
     eval_meta_filt.to_csv("./eval/eval_common.tsv", index=False, sep="\t")
     eval_gt_meta_filt.to_csv(single_eval_meta_tsv.replace('.tsv', '_common.tsv'), index=False, sep="\t")
 
+
 def main(train_meta_tsv, val_meta_tsv, eval_meta_tsv, eval_gt_meta_tsv, save_common_labels_txt):
     train_meta = pd.read_csv(train_meta_tsv, sep="\t")
     val_meta = pd.read_csv(val_meta_tsv, sep="\t")
@@ -105,13 +106,14 @@ def main(train_meta_tsv, val_meta_tsv, eval_meta_tsv, eval_gt_meta_tsv, save_com
 
 
 if __name__ == "__main__":
-    meta_path = "/20A021/ccomhuqin_seg/meta"
+    meta_folder = "meta1-1"
+    meta_dir = f"/20A021/ccomhuqin_seg/{meta_folder}"
 
-    labels_to_remove = {'DunG', 'TiaoG', 'Pizz'}
-    single_eval_meta_tsv = "/20A021/ccomhuqin/meta/eval/eval.tsv" # 这个文件是为了inference之后，拼接回原始测试集的annotation
+    labels_to_remove = {'DTG'}
+    single_eval_meta_tsv = f"/20A021/ccomhuqin/{meta_folder}/eval/eval.tsv" # 这个文件是为了inference之后，拼接回原始测试集的annotation
 
-    main(train_meta_tsv=meta_path + '/train/train.tsv',
-         val_meta_tsv=meta_path+'/val/val.tsv',
-         eval_meta_tsv=meta_path+'/eval/eval.tsv',
-         eval_gt_meta_tsv="/20A021/ccomhuqin/meta/eval/eval.tsv",
-         save_common_labels_txt=meta_path+'/common_labels.txt')
+    main(train_meta_tsv=meta_dir + '/train/train.tsv',
+         val_meta_tsv=meta_dir+'/val/val.tsv',
+         eval_meta_tsv=meta_dir+'/eval/eval.tsv',
+         eval_gt_meta_tsv=single_eval_meta_tsv,
+         save_common_labels_txt=meta_dir+'/common_labels.txt')

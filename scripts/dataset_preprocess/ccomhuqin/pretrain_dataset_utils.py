@@ -134,8 +134,8 @@ def convert_to_wav_mono(audio_dir):
 
 def rename_to_wav(tr_tsv):
     df_tr_tsv = pd.read_csv(tr_tsv, delimiter="\t")
-    df_tr_tsv["files"] = df_tr_tsv["files"].str.replace('.flac', '.wav')
-    df_tr_tsv["files"] = df_tr_tsv["files"].str.replace('.mp3', '.wav')
+    df_tr_tsv["files"] = df_tr_tsv["files"].split_str.replace('.flac', '.wav')
+    df_tr_tsv["files"] = df_tr_tsv["files"].split_str.replace('.mp3', '.wav')
     df_tr_tsv.to_csv(tr_tsv.replace('.tsv', '_wav.tsv'), sep="\t", index=False)
 
 def check_if_file_corrupted(tr_tsv):

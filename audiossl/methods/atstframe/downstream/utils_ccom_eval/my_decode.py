@@ -16,7 +16,6 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
 SR = 16000
 WINDOW_SIZE = 10
 STRIDE = 5
-NUM_LABELS = 9
 HOP_LEN = 160
 
 def write_results(filenames, predictions, save_dir):
@@ -157,7 +156,8 @@ def interprete(labels, labels_list):
 
 
 if __name__ == "__main__":
-    labels_list = list(get_lab_dict("/20A021/ccomhuqin_seg/meta/common_labels_na.txt").keys())
+    labels_list = list(get_lab_dict("/20A021/ccomhuqin_seg/meta1-1/common_labels_na.txt").keys())
+    NUM_LABELS = len(labels_list)
     pred_decoder = ManyHotEncoder(
         labels_list,
         audio_len=10, #self.config["data"]["audio_max_len"],
@@ -167,6 +167,6 @@ if __name__ == "__main__":
         fs=16000, #self.config["data"]["fs"],
     )
     median_filter = MedianPool2d(7, same=True)
-    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1231/metrics_test/",
+    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1-1/freeze/0111/metrics_test/",
                   pred_decoder, median_filter)
 

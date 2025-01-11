@@ -106,6 +106,15 @@ def main(meta_path="/20A021/ccomhuqin_seg/meta"):
     print('------------------End of eval----------------')
     eval_new.to_csv("./eval/eval_rm_intersect.tsv", index=False, sep="\t")
 
+def rm_intersect_gt():
+    meta_dir = "/20A021/ccomhuqin/meta1-1"
+    eval_df = pd.read_csv(meta_dir+"/eval/eval_common.tsv", delimiter="\t")
+    eval_new = rm_intersec(eval_df)
+    eval_new.to_csv(meta_dir+"/eval/eval_rm_intersect.tsv", index=False, sep="\t")
+
 if __name__ == "__main__":
     #main()
-    calculate_label_duration(meta_dir="/20A021/ccomhuqin_seg/meta/train", meta_tsv='train_common.tsv')
+    #calculate_label_duration(meta_dir="/20A021/ccomhuqin_seg/meta/train", meta_tsv='train_common.tsv')
+
+    # 只有ccomhuqin 测试集的gt文件需要去掉intersect label，原因是计算psds时，不允许相同类别的frame重叠
+    rm_intersect_gt()

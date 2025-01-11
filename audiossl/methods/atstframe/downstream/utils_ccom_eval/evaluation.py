@@ -36,7 +36,7 @@ def generate_pred_tsv_atst(pred_path, save_path):
 
 def match_filename_with_gt(pred_path, gt_path = "/20A021/ccomhuqin/data/eval/"):
     pred_df = pd.read_csv(pred_path+"/all.tsv", sep="\t")
-    pred_df['filename'] = pred_df['filename'].str.replace("/banhu_hbz", "/media/banhu_hbz")
+    pred_df['filename'] = pred_df['filename'].split_str.replace("/banhu_hbz", "/media/banhu_hbz")
     pred_df.to_csv(pred_path+"/all.tsv", index=False, sep="\t")
     #pred_df.replace("Huangjiangqin", "", regex=True)
 
@@ -83,21 +83,20 @@ def check_pred_match_gt(pred_csv, gt_tsv, gt_duration_tsv):
     assert pred_filenames == gt_filenames
     assert gt_filenames == gt_duration_filenames
 
-
 if __name__ == "__main__":
     #----------------ATST-----------------------
-    metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1231/metrics_test/"
-    # test_tsv = "/20A021/ccomhuqin/meta/eval/eval_rm_intersect.tsv"
-    # test_dur = "/20A021/ccomhuqin/meta/eval/eval_duration.tsv"
-    save_test_tsv = "/20A021/finetune_music_dataset/exp/audiossl/eval_rm_intersect.tsv"
-    save_test_dur = "/20A021/finetune_music_dataset/exp/audiossl/eval_duration.tsv"
-    #rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur)
+    metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1-1/freeze/0111/metrics_test/"
+    test_tsv = "/20A021/ccomhuqin/meta1-1/eval/eval_rm_intersect.tsv"
+    test_dur = "/20A021/ccomhuqin/meta1-1/eval/eval_durations.tsv"
+    save_test_tsv = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_rm_intersect.tsv"
+    save_test_dur = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_durations.tsv"
+    rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur)
 
     # 这些代码只跑一遍
     predictions_dir = os.path.join(metrics_dir, 'predictions')
     generate_pred_tsv_atst(pred_path=predictions_dir, save_path=metrics_dir)
 
-    #check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=save_test_tsv, gt_duration_tsv=save_test_dur)
+    check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=save_test_tsv, gt_duration_tsv=save_test_dur)
     compute_metrics(threshold=0, pred_csv=metrics_dir+"pred_all.csv",
                     gt_tsv=save_test_tsv, gt_dur=save_test_dur,
                     save_path=metrics_dir)
