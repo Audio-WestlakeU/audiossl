@@ -84,29 +84,31 @@ def check_pred_match_gt(pred_csv, gt_tsv, gt_duration_tsv):
     assert gt_filenames == gt_duration_filenames
 
 if __name__ == "__main__":
-    #----------------ATST-----------------------
-    metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1-1/freeze/0111/metrics_test/"
-    test_tsv = "/20A021/ccomhuqin/meta1-1/eval/eval_rm_intersect.tsv"
-    test_dur = "/20A021/ccomhuqin/meta1-1/eval/eval_durations.tsv"
-    save_test_tsv = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_rm_intersect.tsv"
-    save_test_dur = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_durations.tsv"
-    rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur)
+    # ori_test_tsv = "/20A021/ccomhuqin/meta1-1/eval/eval_rm_intersect.tsv"
+    # ori_test_dur = "/20A021/ccomhuqin/meta1-1/eval/eval_durations.tsv"
+    gt_test_tsv = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_rm_intersect.tsv"
+    gt_test_dur = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_durations.tsv"
+    #rename_gt_atst(ori_test_tsv, ori_test_dur, gt_test_tsv, gt_test_dur) 只跑一遍
 
-    # 这些代码只跑一遍
-    predictions_dir = os.path.join(metrics_dir, 'predictions')
-    generate_pred_tsv_atst(pred_path=predictions_dir, save_path=metrics_dir)
-
-    check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=save_test_tsv, gt_duration_tsv=save_test_dur)
-    compute_metrics(threshold=0, pred_csv=metrics_dir+"pred_all.csv",
-                    gt_tsv=save_test_tsv, gt_dur=save_test_dur,
-                    save_path=metrics_dir)
+    #----------------- ATST-------------
+    # atst_metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1-1/freeze/0111/metrics_test/"
+    # predictions_dir = os.path.join(metrics_dir, 'predictions')
+    # generate_pred_tsv_atst(pred_path=predictions_dir, save_path=metrics_dir)
+    #
+    # check_pred_match_gt(pred_csv=metrics_dir+"pred_all.csv", gt_tsv=gt_test_tsv, gt_duration_tsv=gt_test_dur)
+    # compute_metrics(threshold=0, pred_csv=metrics_dir+"pred_all.csv",
+    #                 gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
+    #                 save_path=metrics_dir)
 
     #---------------MERT-------------------
-    # generate_pred_tsv(pred_path ="/20A021/compare_with/mert/results_1227")
-    # test_tsv = "/20A021/ccomhuqin/meta/eval/eval_rm_intersect.tsv"
-    # test_dur = "/20A021/ccomhuqin/meta/eval/eval_durations.tsv"
-    # metrics_dir = "/20A021/compare_with/mert/results_1227/"
-    # compute_metrics(threshold=0.5, pred_csv=metrics_dir + "remove_DTG_all.csv")
+    mert_metrics_dir = '/20A021/compare_with/mert/1-1/0113/results/'
+    predictions_dir = os.path.join(mert_metrics_dir, 'predictions')
+    generate_pred_tsv_atst(pred_path=predictions_dir, save_path=mert_metrics_dir)
+
+    check_pred_match_gt(pred_csv=mert_metrics_dir + "pred_all.csv", gt_tsv=gt_test_tsv, gt_duration_tsv=gt_test_dur)
+    compute_metrics(threshold=0, pred_csv=mert_metrics_dir + "pred_all.csv",
+                    gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
+                    save_path=mert_metrics_dir)
 
 
 
