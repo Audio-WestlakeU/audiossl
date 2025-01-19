@@ -1,3 +1,4 @@
+import librosa
 import matplotlib.pyplot as plt
 import os
 
@@ -10,8 +11,8 @@ import numpy as np
 from audiossl.datasets.as_strong_utils.as_strong_dict import get_lab_dict
 from model import FrameATSTLightningModule
 from audiossl.transforms.common import MinMax
-from pathlib import Path
-
+from tqdm import tqdm
+import soundfile as sf
 
 def plot_spec(x, save_path):
     t = range(0, x.shape[0])
@@ -44,14 +45,39 @@ def wav2mel(wav_file):
     melspec_t = torchaudio.transforms.MelSpectrogram(
         16000, f_min=60, f_max=7800, hop_length=160, win_length=1024, n_fft=1024, n_mels=64)
     to_db = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80)
-
     normalize = MinMax(min=-79.6482, max=50.6842)
 
-    audio, sr = torchaudio.load(wav_file)
-    assert sr == 16000
-    melspec = normalize(to_db(melspec_t(audio)))
-    return melspec
+    info = sf.info(wav_file)
+    # 提取采样率和时长
+    sr = info.samplerate
+    duration = info.duration
+    print(f'{wav_file} original sr: {sr}')
+    # 计算随机起始点
+    num_samples = 10 * sr
+    max_start = duration * sr - num_samples  # 最大起始点
+    start_index = np.random.randint(0, max_start + 1) if max_start > 0 else 0
+    # 截取 10 秒的波形
+    waveform, _ = torchaudio.load(wav_file, frame_offset=start_index, num_frames=num_samples,normalize=True)
+    try:
+        resampled_waveform = apply_resample_mono(waveform, sr)
+        melspec = normalize(to_db(melspec_t(resampled_waveform)))
+        return melspec
+    except Exception as e:
+        print('-------------- Exception------------')
+        print(f"caught exception for {wav_file}")
+        print(e)
+        return None
 
+def apply_resample_mono(waveform, original_sample_rate):
+    if waveform.size(dim=0) > 1: # Convert to mono
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+    if original_sample_rate != 16000:
+        resampler = torchaudio.transforms.Resample(orig_freq=original_sample_rate, new_freq=16000)
+        waveform = resampler(waveform)
+        #waveform = torchaudio.functional.resample(waveform, orig_freq=original_sample_rate, new_freq=self.target_sample_rate)
+    assert waveform.size(0) == 1
+    assert waveform.size(1) <= 160000
+    return waveform
 
 def get_pretrained_encoder(pretrained_ckpt_path):
     # get pretrained encoder
@@ -69,7 +95,7 @@ def mel2att(mel, model):
     return model.get_last_selfattention(mel.unsqueeze(0))
 
 
-def plot_tsne_for_all_files(model, save_dir, save_name):
+def plot_tsne_for_ccomhuqin(model, save_dir, save_name='ccomhuqin'):
     tsv = "/20A021/ccomhuqin_seg/meta1-1/train/train.tsv"
     df = pd.read_csv(tsv, sep='\t')
     labels_df = df.groupby('filename')
@@ -80,6 +106,8 @@ def plot_tsne_for_all_files(model, save_dir, save_name):
         #if ori_filename.startswith('汾水情1') and int(start) % 10 == 0:
         print(name)
         mel = wav2mel(name).to(device)
+        if mel is None:
+            continue
         features, frame_labels = mel2features(mel, model, group)
         features_list.append(features)
         labels_list.append(frame_labels)
@@ -91,10 +119,55 @@ def plot_tsne_for_all_files(model, save_dir, save_name):
     np.save(feature_save_path, all_features)
     np.save(label_save_path, all_labels)
     print(f"Save to {feature_save_path} and {label_save_path}")
-    plot_tsne(save_dir, save_name, sampling_ratio=0.05)  # 每个类别采样5%
+    plot_tsne_with_labels(save_dir, save_name, sampling_ratio=0.05)  # 每个类别采样5%
 
 
-def plot_tsne(save_dir, save_name, sampling_ratio=0.01, min_sample_size=100):
+def plot_tsne_for_wav_files(model, save_dir, save_name='train_50up'):
+    audio_dir = "/20A021/dataset_from_dyl/train-50up/audio/"
+    files = os.listdir(audio_dir)
+    sampled_files = np.random.choice(files, size=int(len(files) * 0.1), replace=False)
+    print(f'sample {len(sampled_files)} audio files.')
+    features_list = []
+    for name in tqdm(sampled_files):
+        print(name)
+        filename=os.path.join(audio_dir, name)
+        mel = wav2mel(filename)
+        if mel is None:
+            continue
+        features = mel2features(mel.to(device), model)
+        # 随机选择一个 time_step
+        random_time_step = np.random.choice(features.shape[0])  # 从 0 到 Time steps-1 中随机选择一个索引
+        random_feature = features[random_time_step, np.newaxis]  # 输出形状是[1,768]
+        features_list.append(random_feature)
+    all_features = np.vstack(features_list)  # 形状为 (no_of_sampled_files, 768)
+    print(f"Successfuly transformed features for {all_features.shape} files")
+    # 保存结果
+    feature_save_path = os.path.join(save_dir, f"tsne_features_{save_name}.npy")
+    np.save(feature_save_path, all_features)
+    print(f"Save to {feature_save_path}")
+    plot_tsne_no_labels(save_dir, save_name, sampling_ratio=1.0)  # 每个类别采样5%
+
+
+def plot_tsne_no_labels(save_dir, save_name, sampling_ratio=1.0):
+    # 假设 features 是原始数据，形状为 (n_samples, n_features)
+    features = np.load(os.path.join(save_dir, f"tsne_features_{save_name}.npy"), allow_pickle=True)
+    # 对 features 进行采样
+    n_samples = len(features)
+    sample_indices = np.random.choice(n_samples, size=int(n_samples * sampling_ratio), replace=False)
+    sampled_features = features[sample_indices]
+
+    tsne = TSNE(n_components=2, random_state=42)
+    features_tsne = tsne.fit_transform(sampled_features)
+    print(f"number of features: {len(sampled_features)}")
+
+    # 可视化
+    plt.figure(figsize=(10, 8))
+    plt.scatter(features_tsne[:, 0], features_tsne[:, 1], s=7)
+    plt.title(f"t-SNE Visualization of {save_name}_{sampling_ratio}")
+    plt.savefig(save_dir + f'tsne_sample_{save_name}_{len(sampled_features)}_nolabel.png', bbox_inches='tight')
+    plt.close()
+
+def plot_tsne_with_labels(save_dir, save_name, sampling_ratio=0.01, min_sample_size=100):
     # 假设 features 是原始数据，形状为 (n_samples, n_features)
     all_features_tsne = np.load(os.path.join(save_dir, f"tsne_features_{save_name}.npy"), allow_pickle=True)
     all_labels = np.load(os.path.join(save_dir, f"tsne_labels_{save_name}.npy"), allow_pickle=True)
@@ -120,6 +193,7 @@ def plot_tsne(save_dir, save_name, sampling_ratio=0.01, min_sample_size=100):
     # 合并采样结果
     sampled_features = np.vstack(sampled_features_list)
     sampled_labels = np.concatenate(sampled_labels_list)
+    print(f"Number of features: {len(sampled_features)}")
 
     tsne = TSNE(n_components=2, random_state=42)
     features_tsne = tsne.fit_transform(sampled_features)
@@ -129,20 +203,20 @@ def plot_tsne(save_dir, save_name, sampling_ratio=0.01, min_sample_size=100):
     # 为每个标签分配颜色
     colors = plt.cm.Set1(np.linspace(0, 1, len(unique_labels)))
     color_map = {label: color for label, color in zip(unique_labels, colors)}
-
+    plt.figure(figsize=(10, 8))
     # 绘制所有数据点，按标签设置颜色
     for label in unique_labels:
         indices = np.where(sampled_labels == label)[0]  # 找到当前标签对应的数据点索引
         plt.scatter(features_tsne[indices, 0],
                     features_tsne[indices, 1],
-                    color=color_map[label], label=label, s=10)
+                    color=color_map[label], label=label, s=7)
 
     plt.title('t-SNE Visualization')
     plt.legend()
-    plt.savefig(save_dir + f'tsne_sample_{save_name}_{sampling_ratio}.png', bbox_inches='tight')
+    plt.savefig(save_dir + f'tsne_sample_{save_name}_{len(sampled_features)}.png', bbox_inches='tight')
     plt.close()
 
-def mel2features(mel, model, label_df):
+def mel2features(mel, model, label_df=None):
     # 得到frames的特征图
     model.eval()
     with torch.no_grad():
@@ -150,6 +224,8 @@ def mel2features(mel, model, label_df):
     bs, n_frames, feature_dim = features.shape
     features = features.view(-1, feature_dim)  # 合并batch_size和frames成一个维度
     features_np = features.cpu().numpy()
+    if label_df is None:  # No labels
+        return features_np
 
     # 生成对应标签
     frame_duration = 0.04  # 40ms
@@ -229,24 +305,33 @@ def vis_tsne_one_file(wav_file, mel, model, save_path, dim=2):
     plt.close()
 
 
+def main_plot_att(save_path):
+    model = get_pretrained_encoder(ckpt_path).to(device)
+    mel = wav2mel(wav_file).to(device)
+    plot_spec(mel[0].cpu().numpy(),os.path.join(save_path,"mel.png"))
+    att = mel2att(mel, model)
+    print("len of attention: ", len(att))
+
+    for i,att_ in enumerate(att):
+        plot_att(att_, save_path, name="{}-".format(i))
+
+def main_plot_tsne(tsne_save_dir):
+    os.makedirs(tsne_save_dir, exist_ok=True)
+    model = get_pretrained_encoder(ckpt_path).to(device)
+    mel = wav2mel(wav_file).to(device)
+    single_file = True
+    if single_file:
+        vis_tsne_one_file(wav_file, mel, model, save_path=tsne_save_dir, dim=3)
+    else:
+        plot_tsne_for_wav_files(model, tsne_save_dir, save_name='train_50up')
+
 if __name__ == "__main__":
     wav_file = "/20A021/ccomhuqin_seg/data/train/低音板胡/串调1-1_0_10.wav"
     ckpt_path = "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
     tsne_save_dir = "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/tsne/"
-    plot_tsne(tsne_save_dir, 'all', 0.02)
-    exit(0)
 
     os.makedirs(tsne_save_dir, exist_ok=True)
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    mel = wav2mel(wav_file).to(device)
-    # plot_spec(mel[0].cpu().numpy(),os.path.join(save_path,"mel.png"))
 
-    model = get_pretrained_encoder(ckpt_path).to(device)
-    #vis_tsne_one_file(wav_file, mel, model, save_path=tsne_save_dir, dim=3)
-    plot_tsne_for_all_files(model, tsne_save_dir, 'all')
-
-    # att = mel2att(mel, model)
-    # print("len of attention: ", len(att))
-    #
-    # for i,att_ in enumerate(att):
-    #     plot_att(att_, save_path, name="{}-".format(i))
+    #plot_tsne_no_labels(tsne_save_dir, save_name='train_50up', sampling_ratio=0.2)
+    plot_tsne_with_labels(tsne_save_dir, save_name='ccomhuqin', sampling_ratio=0.025)

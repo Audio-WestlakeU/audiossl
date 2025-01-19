@@ -432,7 +432,7 @@ def onehot_gpu_decode_preds(strong_preds, thresholds, filenames, encoder, median
     prediction_dfs_gpu = encoder.gpu_decode_strong(smooth_preds, thresholds, filenames)
     return prediction_dfs_gpu
 
-def onehot_decode_merge_preds(strong_preds, thresholds, filenames, encoder, median_filter):
+def onehot_decode_merge_preds(strong_preds, thresholds, filenames, encoder, median_filter=None):
     # 将原来的decode中manyhot改成onehot，符合多分类使用crossentropyloss的方法，传入thresholds=[0]
     # 和onehot_decode_preds保持一致
     strong_preds = strong_preds.transpose(0,1).unsqueeze(0) # [T,C] -> [1,C,T]
@@ -447,8 +447,11 @@ def onehot_decode_merge_preds(strong_preds, thresholds, filenames, encoder, medi
     # step 4: 维度变成[1, Bsz, Cls, T]
     binary_preds = binary_preds.unsqueeze(0)
     # 后面的和gpu_decode_preds一致
-    smooth_preds = median_filter(binary_preds.float())
-    prediction_dfs_gpu = encoder.gpu_decode_strong(smooth_preds, thresholds, filenames)
+    if median_filter is not None:
+        smooth_preds = median_filter(binary_preds.float())
+        prediction_dfs_gpu = encoder.gpu_decode_strong(smooth_preds, thresholds, filenames)
+    else:
+        prediction_dfs_gpu = encoder.gpu_decode_strong(binary_preds, thresholds, filenames)
     return prediction_dfs_gpu
 
 

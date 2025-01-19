@@ -166,7 +166,7 @@ if __name__ == "__main__":
         net_pooling=4, #self.config["data"]["net_subsample"],
         fs=16000, #self.config["data"]["fs"],
     )
-    median_filter = MedianPool2d(7, same=True)
-    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1-1/freeze/0111/metrics_test/",
-                  pred_decoder, median_filter)
+    median_filter = MedianPool2d(7, same=True)  #freeze_mode下为了对比不同的模型，不用filter
+    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1-1/0120/metrics_test/",
+                  pred_decoder, median_filter=median_filter)
 

@@ -53,7 +53,7 @@ def run(dict_args, pretrained_module):
                               save_last=True,
                               monitor="val/object_metric",
                               mode="min",
-                              save_top_k=1,
+                              save_top_k=2,
                               )
     early_stop_cb = EarlyStopping(
         monitor="val/object_metric",
@@ -134,7 +134,7 @@ def main():
     # parser.add_argument("--save_path", type=str, default="./logs/as_strong_407/")
     # parser.add_argument('--nproc', type=str,  default="1,")
     # parser.add_argument("--dcase_conf", type=str, default="./conf/patch_40.yaml")
-    parser.add_argument("--test_from_checkpoint", type=str, default=None)
+    # parser.add_argument("--test_from_checkpoint", type=str, default=None)
     # parser.add_argument("--freeze_mode", action="store_true")
     # parser.add_argument("--prefix", type=str, default="/")
     # parser.add_argument("--lr_scale", type=float, default=1.0)
@@ -194,9 +194,12 @@ def main():
         pretrained_module.finetune_mode()
 
     # 只有当训练的时候，才保存这些args到训练的文件夹下。
-    if dict_args["test_from_checkpoint"] is None:
+    if dict_args["test_from_checkpoint"] == "":
+        config = parseConfig(dict_args["dcase_conf"])
+        dict_args["dcase_conf_params"] = config
         with open(os.path.join(dict_args["save_path"], 'args.json'), 'w') as fp:
             json.dump(dict_args, fp)
+
     run(dict_args, pretrained_module)
     pl.seed_everything(42)
 
