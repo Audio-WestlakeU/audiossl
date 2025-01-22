@@ -109,7 +109,7 @@ if __name__ == "__main__":
     meta_folder = "meta1-1"
     meta_dir = f"/20A021/ccomhuqin_seg/{meta_folder}"
 
-    labels_to_remove = {'DTG', 'Pizz'}
+    labels_to_remove = {'DTG'}
     single_eval_meta_tsv = f"/20A021/ccomhuqin/{meta_folder}/eval/eval.tsv" # 这个文件是为了inference之后，拼接回原始测试集的annotation
 
     main(train_meta_tsv=meta_dir + '/train/train.tsv',

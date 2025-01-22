@@ -67,7 +67,7 @@ def create_dcase(as_strong_conf, split, transform=None, target_transform=None):
     return ASStrongDataset(as_strong_conf, split, transform=transform, target_transform=None)
 
 # 需要新的ccomhuqin for finetune
-@register_dataset("ccomhuqin_as_strong", multi_label=False, num_labels=7, num_folds=1)
+@register_dataset("ccomhuqin_as_strong", multi_label=False, num_labels=8, num_folds=1)
 def create_dcase(as_strong_conf, split, transform=None, target_transform=None):
     assert split in ["train", "valid", "test"], "Dataset type: {} is not supported.".format(split)
     return ASStrongDataset(as_strong_conf, split, transform=transform, target_transform=None)

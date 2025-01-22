@@ -160,7 +160,7 @@ if __name__ == "__main__":
     # rename_gt_atst(ori_test_tsv, ori_test_dur, gt_test_tsv, gt_test_dur) #只跑一遍
 
     #----------------- ATST-------------
-    atst_metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1-1/0120/metrics_test/"
+    atst_metrics_dir = "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/metrics_test/"
     predictions_dir = os.path.join(atst_metrics_dir, 'predictions')
     generate_pred_tsv_atst(pred_path=predictions_dir, save_path=atst_metrics_dir)
 

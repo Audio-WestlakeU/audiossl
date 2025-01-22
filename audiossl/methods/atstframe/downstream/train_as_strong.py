@@ -43,24 +43,27 @@ def run(dict_args, pretrained_module):
 
     """train a linear classifier on extracted embedding"""
     # train
-    #logger_tb = TensorBoardLogger(save_path, name="tb_logs")
     logger_wb = WandbLogger(save_dir=dict_args["save_path"], name="wb_logs")
     num_labels = data.num_labels
     multi_label = data.multi_label
     ckpt_cb = ModelCheckpoint(dirpath=save_path,
                               every_n_epochs=1,
-                              filename="checkpoint-{epoch:05d}",
+                              filename="checkpoint-{epoch:03d}",
                               save_last=True,
-                              monitor="val/object_metric",
+                              monitor="val/loss",
                               mode="min",
-                              save_top_k=2,
+                              save_top_k=3,
                               )
     early_stop_cb = EarlyStopping(
-        monitor="val/object_metric",
+        monitor="val/loss",
         patience=10,
         verbose=True,
         mode="min",
     )
+
+    # 从训练数据计算loss weights
+    loss_weights = get_weights_for_loss(data.train_dataloader(), param=dict_args['loss_weight_param'])
+
     if dict_args["arch"] == "distill":
         model = DistillPLModule(
             encoder=pretrained_module,
@@ -89,6 +92,8 @@ def run(dict_args, pretrained_module):
             warmup_epochs=dict_args["warmup_epochs"],
             freeze_mode=dict_args["freeze_mode"],
             lr_scale=dict_args["lr_scale"],
+            loss_weights=loss_weights,
+            classifier=dict_args["classifier"]
         )
     strategy = 'auto' if dict_args["nproc"] == 1 else DDPStrategy(find_unused_parameters=False)
     trainer: Trainer = Trainer(
@@ -123,6 +128,36 @@ def parseConfig(configFile):
     with open(configFile, 'r') as f:
         config = yaml.safe_load(f)
     return config
+
+
+def get_weights_for_loss(dataloader, param):
+    print(f"loss_weight param is {param}")
+    if param == 0.0:
+        return None
+    # extract labels
+    all_labels = []
+    for x, labels, _ in dataloader:
+        all_labels.append(labels)
+    all_labels = torch.cat(all_labels, dim=0)  # (64 * no_of_batches, 7, 250) = (704, 8, 250)
+
+    print('labels: ', all_labels.shape)  # (704, 8, 250)
+    class_sample_counts = all_labels.sum(0).sum(1)  # 对704和250求和 形状: (8,)
+    print('class_sample_counts:', class_sample_counts)
+
+    # label只记录了有技法的类别，需要手动把NA类别也加上
+    total_samples = all_labels.size(0) * all_labels.size(2)  # 共有这么多time_steps
+    print('total_samples: ', total_samples)
+    total_samples_na = total_samples - class_sample_counts.sum()  # 这些是NA的类别数
+    print('total_samples of NA: ', total_samples_na)
+    class_sample_counts[0] = total_samples_na  # 第一个index为0的就是NA的个数
+
+    class_frequencies = class_sample_counts.float() / class_sample_counts.sum()
+    print('class_frequencies:', class_frequencies)
+    class_weights = ((class_frequencies.mean() / class_frequencies) *  # 频率均值与每个类别频率的比值
+                     ((1 - class_frequencies) / (1 - class_frequencies.mean()))  # 频率补数与均值补数的比值
+                     ) ** param  # 平滑处理
+    print('class_weights:', class_weights)
+    return class_weights
 
 
 def main():

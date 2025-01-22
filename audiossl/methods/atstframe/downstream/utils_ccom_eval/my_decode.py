@@ -67,7 +67,7 @@ def decode_results(save_dir, pred_decoder, median_filter):
         results = pickle.load(handle)
 
     save_pred_dir = os.path.join(save_dir, 'predictions')
-    os.makedirs(save_pred_dir, exist_ok=False)
+    os.makedirs(save_pred_dir, exist_ok=True)
     for filename in results:
         probs = collect_and_avg(results[filename], pred_decoder)
         dummy_threshold = 0    # 使用源代码的逻辑，这里的key是threshold，传入的是[0]
@@ -167,6 +167,6 @@ if __name__ == "__main__":
         fs=16000, #self.config["data"]["fs"],
     )
     median_filter = MedianPool2d(7, same=True)  #freeze_mode下为了对比不同的模型，不用filter
-    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1-1/0120/metrics_test/",
+    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/metrics_test/",
                   pred_decoder, median_filter=median_filter)
 

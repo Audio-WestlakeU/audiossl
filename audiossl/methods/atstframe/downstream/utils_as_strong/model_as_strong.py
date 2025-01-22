@@ -17,8 +17,7 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
     onehot_decode_preds,
     MedianPool2d,
     SEDMetrics,
-    gpu_decode_preds,
-    onehot_gpu_decode_preds
+    gpu_decode_preds
 )
 from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
     compute_per_intersection_macro_f1,
@@ -60,6 +59,28 @@ class LinearHead(nn.Module):
         strong = self.linear(x) / temp
         return strong.transpose(1, 2)
 
+
+class MLPHead(nn.Module):
+    def __init__(self, feature_dim, num_labels, frame=True) -> None:
+        super().__init__()
+        self.feature_dim = feature_dim
+        self.hidden_dim = 512
+        self.proj = nn.Linear(self.feature_dim, self.hidden_dim)
+        self.dropout = nn.Dropout(0.2)
+        self.relu = nn.ReLU()
+        self.classifier = nn.Linear(self.hidden_dim, num_labels)
+        self.frame = frame
+
+    def forward(self, x):
+        # 输入形状[64, 250, 768]
+        x = self.proj(x)
+        if not self.frame:
+            x = x.mean(1, False)
+        x = self.dropout(x)
+        x = self.relu(x)
+        x = self.classifier(x)
+        return x.transpose(1, 2)
+
 class FineTuningPLModule(LightningModule):
     def __init__(self,
                  encoder,
@@ -72,7 +93,9 @@ class FineTuningPLModule(LightningModule):
                  multi_label=False,
                  metric_save_dir=None,
                  freeze_mode=False,
-                 lr_scale=1.0):
+                 lr_scale=1.0,
+                 loss_weights=None,
+                 classifier='linear'):
         super().__init__()
         self.freeze_mode = freeze_mode
         self.learning_rate = learning_rate
@@ -81,7 +104,11 @@ class FineTuningPLModule(LightningModule):
         self.niter_per_epoch = niter_per_epoch
         self.metric_save_dir = metric_save_dir
         self.encoder = encoder
-        self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
+
+        if classifier == 'linear':
+            self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
+        elif classifier == 'mlp':
+            self.head = MLPHead(encoder.embed_dim, num_labels)
         self.multi_label = multi_label
         self.num_labels = num_labels
 
@@ -104,8 +131,8 @@ class FineTuningPLModule(LightningModule):
             if self.multi_label:
                 raise Exception('同一个frame多标签的情况下，不能使用CrossEntropyLoss. 这是在datasets.__init__里定义的')
             self.use_ce_loss = True
-            self.loss_fn = torch.nn.CrossEntropyLoss()
-            print("Using CrossEntropyLoss...")
+            self.loss_fn = torch.nn.CrossEntropyLoss(weight=loss_weights)
+            print("Using CrossEntropyLoss with weights: ", loss_weights)
             self.test_psds_buffer = {0: pd.DataFrame()}  # 只用一个0作为替代
             self.test_results = {'filenames': [], 'predictions': []} # 存储所有predictions
         else:
@@ -123,6 +150,7 @@ class FineTuningPLModule(LightningModule):
         # buffer for event based scores which we compute using sed-eval
         self.median_filter = MedianPool2d(7, same=True)
         self.sed_metrics_student = SEDMetrics(intersection_thd=0.5)
+        self.validation_outputs = []
 
         self.lr_scale = lr_scale
 
@@ -135,7 +163,7 @@ class FineTuningPLModule(LightningModule):
         x, labels, _ = batch
         x, labels = self.encoder((x, labels))
 
-        strong_pred = self.head(x) # Linear head contains transpose[1,2]
+        strong_pred = self.head(x)  # Linear head contains transpose[1,2] #[batch, time, class_num]
 
         # Get weak label for real data
         strong_loss = self._calculate_loss(strong_pred, labels)
@@ -153,14 +181,43 @@ class FineTuningPLModule(LightningModule):
         # 以下是要用CrossEntropyLoss需要做的改动
         # 转化shape: (64, 250, 9) ---> (64, 250) 在ASStrongDataset中使用的是ManyHotEncoder, init确认过了不是multilabel
         targets_single_label = labels.argmax(dim=-1)  # (64, 250)，在label_dict里，所有的label都是1～8，当都是0的时候，返回的就是第一个index正好对应0无标签
-        #targets_single_label[labels.sum(dim=-1) == 0] = 0  # 设置为0的时间步表示无标签
         # 展平 logits(strong_pred) 和 targets (labels)
         _B, _T, C = strong_pred.shape
-        assert C==self.num_labels
+        assert C == self.num_labels
         logits_flat = strong_pred.view(-1, C)  # shape: (64 * 250, 9)
         targets_flat = targets_single_label.view(-1)  # shape: (64 * 250,)
 
         return self.loss_fn(logits_flat, targets_flat)  # return CrossEntropyLoss
+
+    def _calculate_framewise_metrics(self):
+        from sklearn.metrics import f1_score, accuracy_score, classification_report
+        # 将所有 batch 的预测和真实标签拼接起来
+        strong_pred = torch.cat([x['preds'] for x in self.validation_outputs], dim=0)  # 形状: [sample_size, cls, T]
+        labels = torch.cat([x['labels'] for x in self.validation_outputs], dim=0)  # 形状: [sample_size, cls, T]
+        strong_pred, labels = strong_pred.transpose(1, 2), labels.transpose(1, 2)  # [sample_size, T, cls][64, 250, 9]
+
+        # 对 strong_pred 进行 Softmax 归一化
+        probs = F.softmax(strong_pred, dim=-1)
+        # 进行 argmax，获取预测类别
+        preds = torch.argmax(probs, dim=-1)  # shape: [sample_size, T]
+        labels = torch.argmax(labels, dim=-1)  # shape: [sample_size, T]
+        # 展开 preds 和 labels
+        preds_flat = preds.view(-1)  # shape: [sample_size * T]
+        labels_flat = labels.view(-1)  # shape: [sample_size * T]
+
+        # 将张量转换为 NumPy 数组
+        preds_flat_np = preds_flat.cpu().numpy()  # 如果张量在 GPU 上，需要先移动到 CPU
+        labels_flat_np = labels_flat.cpu().numpy()
+
+        # 计算 F1 Score
+        f1 = f1_score(labels_flat_np, preds_flat_np, average='macro')  # 使用 'macro' 平均
+        accuracy = accuracy_score(labels_flat_np, preds_flat_np)
+
+        # 使用 classification_report 打印每个类别的详细指标
+        unique_labels = np.unique(np.concatenate([labels_flat_np, preds_flat_np]))
+        report = classification_report(labels_flat_np, preds_flat_np, labels=unique_labels)
+
+        return f1, accuracy, report
 
     def schedule(self):
         for i, param_group in enumerate(self.trainer.optimizers[0].param_groups):
@@ -176,23 +233,29 @@ class FineTuningPLModule(LightningModule):
         x, labels, filenames = batch
         x, labels = self.encoder((x, labels))
 
-        strong_pred = self.head(x) # [bsz, cls, T] [64, 9, 250]
-        # 先计算metrics，因为后面loss计算需要reshape
-        decoded_student_strong = onehot_decode_preds(strong_pred, [0], self.median_filter)
+        strong_pred = self.head(x)  # [bsz, cls, T] [64, 9, 250]
+        # 原代码计算sed_metrics
+        decoded_student_strong = onehot_decode_preds(strong_pred, [0], self.median_filter) # [bsz, cls, T]
         self.sed_metrics_student.accm_macro_f1(decoded_student_strong, labels)
-
+        # 现在计算framewise
+        self.validation_outputs.append({
+            'preds': strong_pred,  # 预测概率
+            'labels': labels  # 真实标签
+        })
         loss_strong_student = self._calculate_loss(strong_pred, labels)
         self.val_loss.append(loss_strong_student.item())
 
     def on_validation_epoch_end(self):
-        # synth dataset
         intersection_f1_macro_student = self.sed_metrics_student.compute_macro_f1()
         val_loss = torch.tensor(np.mean(self.val_loss))
-        obj_metric = torch.tensor(intersection_f1_macro_student.item())
-        self.log("val/student/loss_strong", val_loss)
-        self.log("val/object_metric", val_loss, prog_bar=True)
+        f1_score, accuracy, report = self._calculate_framewise_metrics()
+        print(f'on_validation_epoch_end, epoch {self.current_epoch} classification_report')
+        print(report)
+        print(f'f1_score: {f1_score}', f'accuracy: {accuracy}')
+        self.log("val/loss", val_loss)
+        self.log("val/f1_score", f1_score)
+        self.log("val/accuracy", accuracy)
         self.log("val/student/intersection_f1_macro", intersection_f1_macro_student)
-        return obj_metric
 
     def test_step(self, batch, batch_idx):
         self.encoder.eval()

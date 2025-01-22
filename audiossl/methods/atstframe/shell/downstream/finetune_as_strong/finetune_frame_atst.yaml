@@ -1,8 +1,8 @@
-save_path: "/20A021/finetune_music_dataset/exp/audiossl/1-1/0120"
+save_path: "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug"
 nproc: 1
 devices: 0,1,2,3
 arch: "frameatst"
-test_from_checkpoint: "/20A021/finetune_music_dataset/exp/audiossl/1-1/0120/checkpoint-epoch=00027.ckpt" # This value means only test mode, NO TRAINING!!!!!
+test_from_checkpoint: "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/checkpoint-epoch=023.ckpt" # This value means only test mode, NO TRAINING!!!!!
 pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
 learning_rate: 0.05 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
 lr_scale: 0.75
@@ -12,3 +12,5 @@ dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/uti
 dataset_name: "ccomhuqin_as_strong" # 在datasets/init.py register新的dataset，因为num_label需要修改
 freeze_mode: False
 num_workers: 4
+loss_weight_param: 0.4  # 0代表没有
+classifier: 'linear' # ['linear', 'mlp']

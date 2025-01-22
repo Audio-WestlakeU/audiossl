@@ -414,23 +414,6 @@ def gpu_decode_preds(strong_preds, thresholds, filenames, encoder, median_filter
     prediction_dfs_gpu = encoder.gpu_decode_strong(smooth_preds, thresholds, filenames)
     return prediction_dfs_gpu
 
-def onehot_gpu_decode_preds(strong_preds, thresholds, filenames, encoder, median_filter):
-    # 将原来的decode中manyhot改成onehot，符合多分类使用crossentropyloss的方法，传入thresholds=[0]
-    # 和onehot_decode_preds保持一致
-    B, C, T = strong_preds.shape
-
-    # Step 1: 获取每个时间步概率最大的类别索引
-    argmax_indices = strong_preds.argmax(dim=1)  # shape: [bsz, T]
-    # Step 2: 将类别索引转换为 one-hot 格式
-    binary_preds_one_hot = torch.nn.functional.one_hot(argmax_indices, num_classes=C)  # [Bsz, T, Cls]
-    # Step 3: 调整维度，变回 [Bsz, Cls, T]
-    binary_preds = binary_preds_one_hot.permute(0, 2, 1).float()  # shape: [Bsz, Cls, T]
-    # step 4: 维度变成[1, Bsz, Cls, T]
-    binary_preds = binary_preds.unsqueeze(0)
-    # 后面的和gpu_decode_preds一致
-    smooth_preds = median_filter(binary_preds.float())
-    prediction_dfs_gpu = encoder.gpu_decode_strong(smooth_preds, thresholds, filenames)
-    return prediction_dfs_gpu
 
 def onehot_decode_merge_preds(strong_preds, thresholds, filenames, encoder, median_filter=None):
     # 将原来的decode中manyhot改成onehot，符合多分类使用crossentropyloss的方法，传入thresholds=[0]
