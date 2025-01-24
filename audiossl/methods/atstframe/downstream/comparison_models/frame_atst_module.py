@@ -55,10 +55,10 @@ class FrameATSTPredModule(pl.LightningModule):
 
 def get_frame_atst(pretrained_ckpt_path, **kwargs):
     # get pretrained encoder
-    print("Loading frame-atst model:")
     s = torch.load(pretrained_ckpt_path, map_location="cpu")
     param_names = list(s['state_dict'].keys())
     if not ('model' in param_names[0]):
+        print("Loading frame-atst model from initialize FrameATSTLightningModule")
         pretrained_model = FrameATSTLightningModule(**kwargs)
         renamed_state_dict = {}
         for k, v in s['state_dict'].items():
@@ -66,7 +66,7 @@ def get_frame_atst(pretrained_ckpt_path, **kwargs):
                 renamed_state_dict[k.replace("encoder.encoder.", "")] = v
         pretrained_model.model.teacher.encoder.load_state_dict(renamed_state_dict)
     else:
-        print("Loading from checkpoint")
+        print("Loading frame-atst model from checkpoint:", pretrained_ckpt_path)
         pretrained_model = FrameATSTLightningModule.load_from_checkpoint(pretrained_ckpt_path, **kwargs)
     pretrained_encoder = pretrained_model.model.teacher.encoder
     pretrained_encoder.hyper_param = s['hyper_parameters']

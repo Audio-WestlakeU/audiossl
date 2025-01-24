@@ -18,6 +18,7 @@ WINDOW_SIZE = 10
 STRIDE = 5
 HOP_LEN = 160
 
+
 def write_results(filenames, predictions, save_dir):
     '''
     copy from hubert/src/my_train.py write_results
@@ -25,10 +26,10 @@ def write_results(filenames, predictions, save_dir):
     predictions: concatenation of [bsz, cls, T]
     '''
     # merge results to original songs and write as independent files
-    merge_preds = torch.cat(predictions, dim=0) # 在第一个batch的维度拼接起来
+    merge_preds = torch.cat(predictions, dim=0)  # 在第一个batch的维度拼接起来
     sample_size, C, T = merge_preds.shape
     assert sample_size == len(filenames)
-    logits = merge_preds.transpose(1,2) # 变成[sample_size, T, C]，
+    logits = merge_preds.transpose(1, 2)  # 变成[sample_size, T, C]，
     probs = torch.softmax(logits, dim=-1)
     file_params = {'file': [], 'start': [], 'end': []}
 
@@ -60,7 +61,8 @@ def write_results(filenames, predictions, save_dir):
     with open(os.path.join(save_dir, 'results.pickle'), 'wb') as handle:
         pickle.dump(results, handle)
 
-    #decode_results(save_dir, labels_list)
+    # decode_results(save_dir, labels_list)
+
 
 def decode_results(save_dir, pred_decoder, median_filter):
     with open(os.path.join(save_dir, 'results.pickle'), 'rb') as handle:
@@ -70,7 +72,7 @@ def decode_results(save_dir, pred_decoder, median_filter):
     os.makedirs(save_pred_dir, exist_ok=True)
     for filename in results:
         probs = collect_and_avg(results[filename], pred_decoder)
-        dummy_threshold = 0    # 使用源代码的逻辑，这里的key是threshold，传入的是[0]
+        dummy_threshold = 0  # 使用源代码的逻辑，这里的key是threshold，传入的是[0]
         decoded_strong = onehot_decode_merge_preds(
             probs,
             thresholds=[dummy_threshold],
@@ -82,26 +84,18 @@ def decode_results(save_dir, pred_decoder, median_filter):
         df_cleaned = df[df['event_label'] != 'NA']
         df_cleaned.to_csv(os.path.join(save_pred_dir, filename + '.csv'), index=False)
 
-        # labels = plain_decode(probs)
-        # plain_text = interprete(labels, labels_list)
-        #
-        # predictions_folder = os.path.join(save_dir, 'predictions/')
-        # os.makedirs(predictions_folder, exist_ok=True)
-        # with open(os.path.join(predictions_folder, key + '.csv'), 'w') as f:
-        #     f.write('label,start,end\n')
-        #     for label, start, end in plain_text:
-        #         if label != 'NA':
-        #             f.write(f'{label},{start},{end}\n')
-        # save framewise
-        # np.save(os.path.join(save_pred_dir, key + '.framewise.npy'), probs.argmax(-1).numpy())
+#
+# def decode_k_fold_results(save_dirs, pred_decoder, median_filter):
+#
 
-def collect_and_avg(result_dicts, pred_decoder:ManyHotEncoder):
+
+def collect_and_avg(result_dicts, pred_decoder: ManyHotEncoder):
     '''
     crop out results to window_size
     stack and avg results wrt stride
     '''
     time_ranges = [[item['start'], item['end']] for item in result_dicts]
-    #idx_ranges = [[int(pred_decoder._time_to_frame(value)) for value in row] for row in time_ranges]
+    # idx_ranges = [[int(pred_decoder._time_to_frame(value)) for value in row] for row in time_ranges]
 
     # 1. 确定全局时间范围
     global_start = min(start for start, end in time_ranges)
@@ -125,6 +119,7 @@ def collect_and_avg(result_dicts, pred_decoder:ManyHotEncoder):
 
     return result
 
+
 def plain_decode(probs):
     '''
     probs -> label
@@ -140,8 +135,9 @@ def plain_decode(probs):
             results[-1][-1] = i + 1
         else:
             # new event
-            results.append([l, i, i+1])
+            results.append([l, i, i + 1])
     return results
+
 
 def interprete(labels, labels_list):
     '''
@@ -150,7 +146,7 @@ def interprete(labels, labels_list):
     '''
     texts = list()
     for (label_idx, start, end) in labels:
-        start, end = map(lambda x: librosa.frames_to_time(x, sr=SR, hop_length=320),[start, end])
+        start, end = map(lambda x: librosa.frames_to_time(x, sr=SR, hop_length=320), [start, end])
         texts.append([labels_list[label_idx], start, end])
     return texts
 
@@ -160,13 +156,14 @@ if __name__ == "__main__":
     NUM_LABELS = len(labels_list)
     pred_decoder = ManyHotEncoder(
         labels_list,
-        audio_len=10, #self.config["data"]["audio_max_len"],
-        frame_len=1024, #self.config["feats"]["n_filters"],
-        frame_hop=160, #self.config["feats"]["hop_length"],
-        net_pooling=4, #self.config["data"]["net_subsample"],
-        fs=16000, #self.config["data"]["fs"],
+        audio_len=10,  # self.config["data"]["audio_max_len"],
+        frame_len=1024,  # self.config["feats"]["n_filters"],
+        frame_hop=160,  # self.config["feats"]["hop_length"],
+        net_pooling=4,  # self.config["data"]["net_subsample"],
+        fs=16000,  # self.config["data"]["fs"],
     )
-    median_filter = MedianPool2d(7, same=True)  #freeze_mode下为了对比不同的模型，不用filter
-    decode_results("/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/metrics_test/",
-                  pred_decoder, median_filter=median_filter)
-
+    median_filter = MedianPool2d(7, same=True)  # freeze_mode下为了对比不同的模型，不用filter
+    for k in range(1):
+        print(f'Decoding fold_{k + 1}...')
+        decode_results(f"/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_{k + 1}/metrics_test/",
+                       pred_decoder, median_filter=median_filter)

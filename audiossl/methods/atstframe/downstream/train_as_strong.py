@@ -20,20 +20,30 @@ from audiossl.methods.atstframe.downstream.utils_as_strong.model_distill_as_stro
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+import wandb
 import torch
+from datetime import datetime
 
 torch.set_float32_matmul_precision('high')
+current_time = datetime.now()
+time_str = current_time.strftime("%Y-%m-%d_%H-%M")  # 用于此次wandbproject名称
+pl.seed_everything(42)  # 当设置45的时候，发现dataloader读取标签出来，抛弓竟然为0，随机种子能够影响数据读取？！
 
-
-def run(dict_args, pretrained_module):
-    # dict_args = vars(args)
-    test_ckpt = dict_args["test_from_checkpoint"]
-    save_path = dict_args["save_path"]
+def run(dict_args, pretrained_module, kth_fold, save_path, test_ckpt=""):
+    # 初始化 WandB 运行
+    wandb.init(
+        project=f"audiossl_{time_str}",
+        group="5-fold",  # 将所有实验分组
+        name=f"k_fold_{kth_fold + 1}"  # 每次实验的名称
+    )
+    wandb_logger = WandbLogger()
+    os.makedirs(save_path, exist_ok=True)
 
     """extract embedding"""
     data_transform = pretrained_module.transform
 
     data = DownstreamDataModule(**dict_args,
+                                kth_fold=kth_fold,
                                 batch_size=dict_args["batch_size_per_gpu"],
                                 fold=False,
                                 collate_fn=collate_fn,
@@ -43,16 +53,15 @@ def run(dict_args, pretrained_module):
 
     """train a linear classifier on extracted embedding"""
     # train
-    logger_wb = WandbLogger(save_dir=dict_args["save_path"], name="wb_logs")
     num_labels = data.num_labels
     multi_label = data.multi_label
     ckpt_cb = ModelCheckpoint(dirpath=save_path,
                               every_n_epochs=1,
                               filename="checkpoint-{epoch:03d}",
-                              save_last=True,
+                              # save_last=True,
                               monitor="val/loss",
                               mode="min",
-                              save_top_k=3,
+                              save_top_k=1,
                               )
     early_stop_cb = EarlyStopping(
         monitor="val/loss",
@@ -70,7 +79,7 @@ def run(dict_args, pretrained_module):
             num_labels=num_labels,
             multi_label=multi_label,
             niter_per_epoch=len(data.train_dataloader()) // dict_args["nproc"],
-            metric_save_dir=(dict_args["save_path"]),
+            metric_save_dir=save_path,
             learning_rate=dict_args["learning_rate"],
             dcase_conf=dict_args["dcase_conf"],
             max_epochs=dict_args["max_epochs"],
@@ -85,7 +94,7 @@ def run(dict_args, pretrained_module):
             num_labels=num_labels,
             multi_label=multi_label,
             niter_per_epoch=len(data.train_dataloader()) // dict_args["nproc"],
-            metric_save_dir=(dict_args["save_path"]),
+            metric_save_dir=save_path,
             learning_rate=dict_args["learning_rate"],
             dcase_conf=dict_args["dcase_conf"],
             max_epochs=dict_args["max_epochs"],
@@ -105,7 +114,7 @@ def run(dict_args, pretrained_module):
         devices=dict_args["nproc"],
         gradient_clip_val=3.0,
         max_epochs=dict_args["max_epochs"],
-        logger=logger_wb,
+        logger=wandb_logger,
         callbacks=[
             ckpt_cb,
             early_stop_cb,
@@ -117,10 +126,12 @@ def run(dict_args, pretrained_module):
     if test_ckpt == "":
         trainer.fit(model, datamodule=data,
                     ckpt_path=last_ckpt if os.path.exists(last_ckpt) else None)
+        best_val_loss = ckpt_cb.best_model_score.item()
+        wandb.finish()
+        return best_val_loss
     else:
         best_ckpt = test_ckpt
         trainer.test(model, datamodule=data, ckpt_path=best_ckpt)
-    return
 
 
 def parseConfig(configFile):
@@ -181,62 +192,60 @@ def main():
     # 用my_train_small.yaml override train_small.sh中的参数
     dict_args.update(parseConfig(
         configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_atst.yaml"))
-
-    # #args = parser.parse_args()
-    # # Change log name
-    # if dict_args["lr_scale"] != 1.0:
-    #     dict_args["lr_scale"] =  dict_args["lr_scale"] + "_lr_scale_{}".format(args.lr_scale)
-    # if not args.freeze_mode:
-    #     args.prefix += "_finetune/"
-    # args.save_path = args.save_path + args.arch + args.prefix
-
-    # Registry dataset
-    # args.dataset_name = "as_strong"
     print("Target task:", dict_args["dataset_name"])
-    # Read config files and overwrite setups
-    """load pretrained encoder"""
-    print("Getting pretrain encoder...")
     arch, pretrained_ckpt_path = dict_args["arch"], dict_args["pretrained_ckpt_path"]
-    if arch == "ssast":
-        pretrained_module = SSASTPredModule(pretrained_ckpt_path)
-    elif arch == "byola":
-        pretrained_module = BYOLAPredModule(pretrained_ckpt_path)
-    elif arch == "clipatst":
-        pretrained_module = ATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
-    elif arch == "maeast":
-        pretrained_module = MAEASTPredModule(pretrained_ckpt_path)
-    elif arch == "frameatst":
-        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
-    elif arch == "beats":
-        pretrained_module = BeatsPredModule(pretrained_ckpt_path)
-    elif arch == "patchssast":
-        pretrained_module = PatchSSASTPredModule(pretrained_ckpt_path)
-    elif arch == "patchmaeast":
-        pretrained_module = PatchMAEASTPredModule(pretrained_ckpt_path)
-    elif arch == "audioMAE":
-        pretrained_module = AudioMAEPredModule(pretrained_ckpt_path)
-    elif arch == "mmd":
-        pretrained_module = MMDPredModule(pretrained_ckpt_path)
-    elif arch == "distill":
-        pretrained_module = DistillATSTPredModule(pretrained_ckpt_path)
-    print("Freezing/Unfreezing encoder parameters?...", end="")
+    if arch != "frameatst":
+        raise NotImplementedError(
+            "Only support frameatst module for code simplification. Please check original codebase if you need other implementations.")
 
-    if dict_args["freeze_mode"]:
-        print("Freeze mode")
-        pretrained_module.freeze()
-    else:
-        print("Finetune mode")
-        pretrained_module.finetune_mode()
-
-    # 只有当训练的时候，才保存这些args到训练的文件夹下。
-    if dict_args["test_from_checkpoint"] == "":
+    # 训练模式
+    if "test_from_checkpoints" not in dict_args:
         config = parseConfig(dict_args["dcase_conf"])
         dict_args["dcase_conf_params"] = config
         with open(os.path.join(dict_args["save_path"], 'args.json'), 'w') as fp:
             json.dump(dict_args, fp)
+        run_k_fold(dict_args, pretrained_ckpt_path)
+    else:
+        predict_k_fold(dict_args, pretrained_ckpt_path)
 
-    run(dict_args, pretrained_module)
-    pl.seed_everything(42)
+
+def run_k_fold(dict_args, pretrained_ckpt_path):
+    print(f"Start run {dict_args['k_fold']}_fold cross_validation")
+    train_data_list = dict_args['dcase_conf_params']['data']['strong_train_k_fold']
+    val_data_list = dict_args['dcase_conf_params']['data']['strong_val_k_fold']
+    assert (len(train_data_list) == dict_args['k_fold'])
+    assert (len(val_data_list) == dict_args['k_fold'])
+    best_val_loss_list = []
+    for k in range(dict_args['k_fold']):
+        print(
+            f'-----------------------------------------------------Run {k + 1}_fold---------------------------------------------------')
+        print("Getting pretrain encoder...")
+        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+        print("Freezing/Unfreezing encoder parameters?...", end="")
+        if dict_args["freeze_mode"]:
+            print("Freeze mode")
+            pretrained_module.freeze()
+        else:
+            print("Finetune mode")
+            pretrained_module.finetune_mode()
+        best_val_loss = run(dict_args, pretrained_module, k,
+                            save_path=os.path.join(dict_args["save_path"], f"fold_{k + 1}"))
+        best_val_loss_list.append(best_val_loss)
+    print(best_val_loss_list)
+
+
+def predict_k_fold(dict_args, pretrained_ckpt_path):
+    print(f"Predict {dict_args['k_fold']}_fold checkpoints and generate results.")
+    test_checkpoints = dict_args["test_from_checkpoints"]
+    assert (len(test_checkpoints) == dict_args['k_fold'])
+    for k in range(dict_args['k_fold']):
+        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+        pretrained_module.eval()  # 这里是新加的，原来是统一和train相同，但是在test模式下，只需要eval就可以，验证一下是否正确
+        ckpt = test_checkpoints[k]
+        print(f"Predict using {ckpt}......")
+        run(dict_args, pretrained_module, k,
+            save_path=os.path.join(dict_args["save_path"], f"fold_{k + 1}"),
+            test_ckpt=ckpt)
 
 
 if __name__ == "__main__":

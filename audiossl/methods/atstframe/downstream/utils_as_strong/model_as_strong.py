@@ -109,6 +109,8 @@ class FineTuningPLModule(LightningModule):
             self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
         elif classifier == 'mlp':
             self.head = MLPHead(encoder.embed_dim, num_labels)
+        else:
+            raise NotImplementedError(f"{classifier} classifier defined in yaml is not supported. Double check it.")
         self.multi_label = multi_label
         self.num_labels = num_labels
 

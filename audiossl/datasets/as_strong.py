@@ -19,7 +19,8 @@ class TransformDataset(torch.utils.data.dataset.Dataset):
         audio = self.transform(wav)
         return audio, labs, filename
 
-def ASStrongDataset(as_strong_conf, split, transform=None, target_transform=None):
+
+def ASStrongDataset(as_strong_conf, split, k_fold=0, transform=None, target_transform=None):
     assert os.path.exists(as_strong_conf), f"{as_strong_conf} not exist!"
     with open(as_strong_conf, "r") as f:
         config = yaml.safe_load(f)
@@ -52,7 +53,7 @@ def ASStrongDataset(as_strong_conf, split, transform=None, target_transform=None
         # -------------------------[ Validation set ]---------------------------
         # Define validation sets
         # Strong dataset 
-        strong_df = pd.read_csv(config["data"]["strong_val_tsv"], sep="\t")
+        strong_df = pd.read_csv(config["data"]["strong_val_k_fold"][k_fold])
         strong_val = StronglyAnnotatedSet(
             config["data"]["test_folder"],
             strong_df,
@@ -67,7 +68,7 @@ def ASStrongDataset(as_strong_conf, split, transform=None, target_transform=None
     else:
         # --------------------------[ Training set ]----------------------------
         # Define synthetic train set
-        strong_df = pd.read_csv(config["data"]["strong_train_tsv"], sep="\t")
+        strong_df = pd.read_csv(config["data"]["strong_train_k_fold"][k_fold])
         strong_train = StronglyAnnotatedSet(
             config["data"]["strong_folder"],
             strong_df,

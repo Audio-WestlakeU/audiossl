@@ -143,6 +143,59 @@ def gen_eval_seg_tsv(meta_dir):
     get_durations(save_meta_tsv, save_meta_duration_tsv)
 
 
+def gen_k_fold(tsv_file="/20A021/ccomhuqin_seg/meta1-1/train_and_val_noDTG.tsv",
+               save_dir="/20A021/ccomhuqin_seg/meta1-1/"):
+    from collections import Counter
+    from sklearn.model_selection import StratifiedKFold
+
+    data = pd.read_csv(tsv_file, sep='\t')
+    def get_most_common_label(labels):
+        """返回出现次数最多的标签"""
+        counter = Counter(labels)
+        return counter.most_common(1)[0][0]  # 返回出现次数最多的标签
+
+    file_labels = data.groupby("filename")["event_label"].apply(get_most_common_label).reset_index()
+    #target_label = "PaoG"  # 只有两个文件有这个，保证每次都各自分在train和val
+    #target_files = file_labels[file_labels["event_label"] == target_label]["filename"].tolist()
+    target_files = ['/20A021/ccomhuqin_seg/data/train/李润泽二胡/赛马1_0_10.wav', '/20A021/ccomhuqin_seg/data/val/李润泽二胡/赛马2_0_10.wav']
+    file_labels_non_target = file_labels[~file_labels["filename"].isin(target_files)]
+    k = 5  # 折数
+    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
+    for fold, (train_idx, val_idx) in enumerate(skf.split(file_labels_non_target["filename"], file_labels_non_target["event_label"])):
+        # 获取非目标标签的训练集和验证集文件名
+        train_files_non_target = file_labels_non_target.iloc[train_idx]["filename"].tolist()
+        val_files_non_target = file_labels_non_target.iloc[val_idx]["filename"].tolist()
+        # 每次划分时，一个文件在训练集，另一个文件在验证集
+        train_files_target = [target_files[fold % 2]]  # 交替选择第一个或第二个文件
+        val_files_target = [target_files[1 - (fold % 2)]]
+
+        # 合并训练集和验证集的文件名
+        train_files = train_files_non_target + train_files_target
+        val_files = val_files_non_target + val_files_target
+        assert len(set(train_files) & set(val_files)) == 0, "训练集和验证集有重复文件名！"
+        train_data = data[data["filename"].isin(train_files)]
+        val_data = data[data["filename"].isin(val_files)]
+        # 检查训练集和验证集是否包含所有标签
+        train_labels = set(train_data["event_label"])
+        val_labels = set(val_data["event_label"])
+        all_labels = set(data["event_label"])
+        # 打印训练集和验证集的标签分布
+        train_label_counts = train_data["event_label"].value_counts().sort_index()
+        val_label_counts = val_data["event_label"].value_counts().sort_index()
+        print(f"-------------Fold {fold + 1}--------------")
+        print("  Training label distribution:")
+        print(train_label_counts.to_string())
+        print("  Validation label distribution:")
+        print(val_label_counts.to_string())
+        assert train_labels == all_labels, f"训练集缺少标签：{all_labels - train_labels}"
+        assert val_labels == all_labels, f"验证集缺少标签：{all_labels - val_labels}"
+
+        train_data.to_csv(os.path.join(save_dir, 'train', f"train_fold_{fold + 1}.csv"), index=False)
+        val_data.to_csv(os.path.join(save_dir, 'val', f"val_fold_{fold + 1}.csv"), index=False)
+        print(f" Training set size: {len(train_data)}")
+        print(f" Validation set size: {len(val_data)}")
+
+
 if __name__ == "__main__":
     STRIDE = 5
     WINDOW_SIZE = 10

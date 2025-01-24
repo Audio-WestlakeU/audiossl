@@ -22,6 +22,7 @@ class DownstreamDataModule(LightningDataModule):
     def __init__(self,
                  dcase_conf:str,
                  dataset_name:str,
+                 kth_fold:int=0,
                  fold:int = 0,
                  batch_size_per_gpu=1024,
                  num_workers=10,
@@ -63,14 +64,17 @@ class DownstreamDataModule(LightningDataModule):
         else:
             self.dataset_train = dataset_info.creator(dcase_conf,
                                                       "train",
+                                                      kth_fold,
                                                       transforms[0],
                                                       target_transform=target_transforms[0])
             self.dataset_val = dataset_info.creator(dcase_conf,
                                                       "valid",
-                                                      transforms[1],
-                                                      target_transform=target_transforms[1])
+                                                    kth_fold,
+                                                    transforms[1],
+                                                    target_transform=target_transforms[1])
             self.dataset_test = dataset_info.creator(dcase_conf,
                                                       "test",
+                                                      kth_fold,
                                                       transforms[2],
                                                       target_transform=target_transforms[2])
         self.save_hyperparameters(ignore=ignores)

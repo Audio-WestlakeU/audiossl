@@ -792,20 +792,22 @@ class PSDSEval:
     @staticmethod
     def inner_compute_f_score(TP_values, FP_values, FN_values, beta):
         """Computes the F-scores for the given TP/FP/FN"""
+        epsilon = 1e-7
         k = (1 + beta ** 2)
         f_scores = (k * TP_values) / (k * TP_values + (beta ** 2) * FN_values
-                                      + FP_values)
+                                      + FP_values + epsilon)
         return f_scores
 
     @staticmethod
     def inner_compute_precision_recall_fscore(TP_values, FP_values, FN_values, beta):
-        precision = TP_values / (TP_values+FP_values)
-        recall = TP_values / (TP_values+FN_values)
-        f_scores = ((1+beta**2) * precision * recall) / (beta**2 * precision + recall)
-        for i, (p,r,f) in enumerate(zip(precision, recall, f_scores)):
-            if np.isnan([p,r,f]).any():
-                print(f"The precision, recall and f-scores of label index {i} is {p, r, f}. Assign NANs to metrics.")
-                precision[i], recall[i], f_scores[i] = np.nan, np.nan, np.nan
+        epsilon = 1e-7  # 平滑项，避免除零错误
+        precision = TP_values / (TP_values+FP_values + epsilon)
+        recall = TP_values / (TP_values+FN_values + epsilon)
+        f_scores = ((1+beta**2) * precision * recall) / (beta**2 * precision + recall + epsilon)
+        # for i, (p,r,f) in enumerate(zip(precision, recall, f_scores)):
+        #     if np.isnan([p,r,f]).any():
+        #         print(f"The precision, recall and f-scores of label index {i} is {p, r, f}. Assign NANs to metrics.")
+        #         precision[i], recall[i], f_scores[i] = np.nan, np.nan, np.nan
         return precision, recall, f_scores
 
     def compute_metrics(self, detections, beta=1.):
@@ -839,7 +841,7 @@ class PSDSEval:
         det_t = self._init_det_table(detections)
         counts, tp_ratios, _, _ = self._evaluate_detections(det_t)
         per_class_tp = np.diag(counts)[:-1]
-        num_gts = per_class_tp / tp_ratios
+        num_gts = per_class_tp / (tp_ratios+ 1e-7)
         per_class_fp = counts[:-1, -1]
         per_class_fn = num_gts - per_class_tp
         f_per_class = self.inner_compute_f_score(per_class_tp, per_class_fp,
