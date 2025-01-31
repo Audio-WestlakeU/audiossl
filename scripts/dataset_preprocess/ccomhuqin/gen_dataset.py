@@ -1,5 +1,7 @@
 import csv
 import os
+import shutil
+
 import pandas as pd
 import librosa
 import torch
@@ -56,6 +58,8 @@ def split2segments(audio_path, save_path):
         # 保存切好的片段audio
         start_idx, end_idx = int(start * TARGET_SR), int(end * TARGET_SR)
         clip = waveform_mono[:, start_idx: end_idx]
+        if os.path.exists(new_filename):
+            raise Exception(f'{new_filename} already exists!')
         torchaudio.save(new_filename, clip, TARGET_SR)
         for onset, duration in intresserad:
             label = intresserad[(onset, duration)]
@@ -70,7 +74,6 @@ def split2segments(audio_path, save_path):
                 offset = end
             elif onset <= start <= end <= offset:
                 onset, offset = start, end
-
             new_onset, new_offset = onset - start, offset - start
             label_timelist.append([new_filename, new_onset, new_offset, label])
     return label_timelist
@@ -142,58 +145,47 @@ def gen_eval_seg_tsv(meta_dir):
     save_meta_duration_tsv = meta_dir + "/eval/eval_duration.tsv"
     get_durations(save_meta_tsv, save_meta_duration_tsv)
 
+def move_to_newfold():
+    file_count = 0
+    for i in range(5):
+        dst_folder = f"/20A021/ccomhuqin/data/fold_{i + 1}"
+        os.makedirs(dst_folder, exist_ok=True)
+        df = pd.read_csv(f"/20A021/ccomhuqin/meta1-1/fold_{i + 1}.csv")
+        for idx, row in df.iterrows():
+            filename = row['filename']
+            # 复制文件到目标文件夹，并保留元数据
+            shutil.copy2(filename, dst_folder)
+            shutil.copy2(filename.replace('.csv', '.wav'), dst_folder)
+            print(f"Moved {filename} and wav to {dst_folder}")
+            file_count += 2
+    print('Copied files: ', file_count)
 
-def gen_k_fold(tsv_file="/20A021/ccomhuqin_seg/meta1-1/train_and_val_noDTG.tsv",
-               save_dir="/20A021/ccomhuqin_seg/meta1-1/"):
-    from collections import Counter
-    from sklearn.model_selection import StratifiedKFold
+def gen_train_val_from_fold():
+    train_folder = os.path.join(seg_meta_dir, 'train')
+    val_folder = os.path.join(seg_meta_dir, 'val')
+    for i in range(5):
+        # 验证集：当前fold
+        val_tsv = seg_meta_dir + f"/fold_{i+1}.tsv"
+        val_df = pd.read_csv(val_tsv, sep='\t')
+        # 训练集：其他4个folds
+        train_dfs = []
+        for j in range(5):
+            if j == i:
+                continue
+            fold_path = os.path.join(seg_meta_dir, f"fold_{j+1}.tsv")
+            train_dfs.append(pd.read_csv(fold_path, sep='\t'))
+        train_df = pd.concat(train_dfs, axis=0)
 
-    data = pd.read_csv(tsv_file, sep='\t')
-    def get_most_common_label(labels):
-        """返回出现次数最多的标签"""
-        counter = Counter(labels)
-        return counter.most_common(1)[0][0]  # 返回出现次数最多的标签
-
-    file_labels = data.groupby("filename")["event_label"].apply(get_most_common_label).reset_index()
-    #target_label = "PaoG"  # 只有两个文件有这个，保证每次都各自分在train和val
-    #target_files = file_labels[file_labels["event_label"] == target_label]["filename"].tolist()
-    target_files = ['/20A021/ccomhuqin_seg/data/train/李润泽二胡/赛马1_0_10.wav', '/20A021/ccomhuqin_seg/data/val/李润泽二胡/赛马2_0_10.wav']
-    file_labels_non_target = file_labels[~file_labels["filename"].isin(target_files)]
-    k = 5  # 折数
-    skf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
-    for fold, (train_idx, val_idx) in enumerate(skf.split(file_labels_non_target["filename"], file_labels_non_target["event_label"])):
-        # 获取非目标标签的训练集和验证集文件名
-        train_files_non_target = file_labels_non_target.iloc[train_idx]["filename"].tolist()
-        val_files_non_target = file_labels_non_target.iloc[val_idx]["filename"].tolist()
-        # 每次划分时，一个文件在训练集，另一个文件在验证集
-        train_files_target = [target_files[fold % 2]]  # 交替选择第一个或第二个文件
-        val_files_target = [target_files[1 - (fold % 2)]]
-
-        # 合并训练集和验证集的文件名
-        train_files = train_files_non_target + train_files_target
-        val_files = val_files_non_target + val_files_target
-        assert len(set(train_files) & set(val_files)) == 0, "训练集和验证集有重复文件名！"
-        train_data = data[data["filename"].isin(train_files)]
-        val_data = data[data["filename"].isin(val_files)]
-        # 检查训练集和验证集是否包含所有标签
-        train_labels = set(train_data["event_label"])
-        val_labels = set(val_data["event_label"])
-        all_labels = set(data["event_label"])
-        # 打印训练集和验证集的标签分布
-        train_label_counts = train_data["event_label"].value_counts().sort_index()
-        val_label_counts = val_data["event_label"].value_counts().sort_index()
-        print(f"-------------Fold {fold + 1}--------------")
-        print("  Training label distribution:")
-        print(train_label_counts.to_string())
-        print("  Validation label distribution:")
-        print(val_label_counts.to_string())
-        assert train_labels == all_labels, f"训练集缺少标签：{all_labels - train_labels}"
-        assert val_labels == all_labels, f"验证集缺少标签：{all_labels - val_labels}"
-
-        train_data.to_csv(os.path.join(save_dir, 'train', f"train_fold_{fold + 1}.csv"), index=False)
-        val_data.to_csv(os.path.join(save_dir, 'val', f"val_fold_{fold + 1}.csv"), index=False)
-        print(f" Training set size: {len(train_data)}")
-        print(f" Validation set size: {len(val_data)}")
+        # 检查train和valid没有重复的
+        common_filenames = set(train_df['filename']).intersection(set(val_df['filename']))
+        if common_filenames:
+            print("train_df 和 val_df 之间存在重复的 filename:")
+            print(common_filenames)
+            exit(1)
+        # 保存
+        train_df.to_csv(os.path.join(train_folder, f"train_fold_{i + 1}.tsv"), sep='\t', index=False)
+        val_df.to_csv(os.path.join(val_folder, f"val_fold_{i + 1}.tsv"), sep='\t', index=False)
+        print(f"Saved to {train_folder} and {val_folder}")
 
 
 if __name__ == "__main__":
@@ -203,16 +195,15 @@ if __name__ == "__main__":
     event_label_col = 'PT1-1'
     ori_data_dir = "/20A021/ccomhuqin/data"
     seg_data_dir = "/20A021/ccomhuqin_seg/data"
-    ori_meta_dir = "/20A021/ccomhuqin/meta1-1"
     seg_meta_dir = "/20A021/ccomhuqin_seg/meta1-1"
 
     # 1. 生成10s的训练数据和验证数据
-    # for split_str in ['train', 'val']:
-    #     save_meta = meta_dir + f"/{split_str}/{split_str}.tsv"
-    #     generate_segment_dataset(ori_audio_dir=ori_data_dir + f"/{split_str}",
-    #                              seg_audio_dir=seg_data_dir + f"/{split_str}",
+    # for k in range(5):
+    #     save_meta = seg_meta_dir + f"/fold_{k+1}.tsv"
+    #     generate_segment_dataset(ori_audio_dir=ori_data_dir + f"/fold_{k + 1}",
+    #                              seg_audio_dir=seg_data_dir + f"/fold_{k + 1}",
     #                              save_meta=save_meta)
-    #     get_durations(save_meta, meta_dir + f"/{split_str}/{split_str}_duration.tsv")
+        #get_durations(save_meta, seg_meta_dir + f"/{split_str}/{split_str}_duration.tsv")
 
     #2. 生成10s的测试数据，用于inference
     # gen_eval_seg_tsv(meta_dir=seg_meta_dir)
@@ -221,11 +212,16 @@ if __name__ == "__main__":
     #gen_eval_tsv(eval_meta_dir=ori_meta_dir + "/eval")
 
     # 4. 检查所有的标注技法的时长，为了排除错误标注和裁剪的问题
-    min_label_sec = 0.04  # 据统计，最短的是DTG最短时长在0.04-0.05之间。其他小于0.04的大部分是有边缘裁剪，和手工错标。
-    meta_tsvs = [seg_meta_dir+"/train/train.tsv",
-                 seg_meta_dir+"/val/val.tsv",
-                 seg_meta_dir+"/eval/eval.tsv",
-                 ori_meta_dir+"/eval/eval.tsv"
-                 ]
-    for tsv in meta_tsvs:
-        check_onset_offset(min_label_sec, tsv)
+    #min_label_sec = 0.04  # 据统计，最短的是DTG最短时长在0.04-0.05之间。其他小于0.04的大部分是有边缘裁剪，和手工错标。
+    # meta_tsvs = [seg_meta_dir+"/train/train.tsv",
+    #              seg_meta_dir+"/val/val.tsv",
+    #              seg_meta_dir+"/eval/eval.tsv"
+    #              ]
+    # for k in range(5):
+    #     meta_tsv = seg_meta_dir + f"/fold_{k+1}.tsv"
+    #     check_onset_offset(min_label_sec, meta_tsv)
+
+    # 5. 把fold5个文件组合成5组train_valid
+    gen_train_val_from_fold()
+
+

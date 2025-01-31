@@ -163,7 +163,7 @@ if __name__ == "__main__":
         fs=16000,  # self.config["data"]["fs"],
     )
     median_filter = MedianPool2d(7, same=True)  # freeze_mode下为了对比不同的模型，不用filter
-    for k in range(1):
+    for k in range(5):
         print(f'Decoding fold_{k + 1}...')
         decode_results(f"/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_{k + 1}/metrics_test/",
                        pred_decoder, median_filter=median_filter)

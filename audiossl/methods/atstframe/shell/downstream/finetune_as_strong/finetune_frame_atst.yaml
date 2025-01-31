@@ -2,11 +2,11 @@ save_path: "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug"
 nproc: 1
 devices: 0,1,2,3
 arch: "frameatst"
-test_from_checkpoints: ["/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_1/checkpoint-epoch=022.ckpt"]
-#                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_2/checkpoint-epoch=066.ckpt",
-#                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_3/checkpoint-epoch=099.ckpt",
-#                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_4/checkpoint-epoch=099.ckpt",
-#                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_5/checkpoint-epoch=099.ckpt"]
+test_from_checkpoints: ["/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_1/checkpoint-epoch=026.ckpt",
+                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_2/checkpoint-epoch=027.ckpt",
+                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_3/checkpoint-epoch=022.ckpt",
+                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_4/checkpoint-epoch=024.ckpt",
+                       "/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_5/checkpoint-epoch=021.ckpt"]
 pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
 learning_rate: 0.05 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
 lr_scale: 0.75
@@ -16,6 +16,6 @@ dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/uti
 dataset_name: "ccomhuqin_as_strong" # 在datasets/init.py register新的dataset，因为num_label需要修改
 freeze_mode: False
 num_workers: 4
-loss_weight_param: 0.4  # 0代表没有
+loss_weight_param: 0.3  # 0代表没有
 classifier: 'linear' # ['linear', 'mlp']
-k_fold: 1
+k_fold: 5

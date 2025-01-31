@@ -15,6 +15,7 @@ from pathlib import Path
 from sklearn.metrics import auc
 from torch.nn.modules.utils import _quadruple
 
+
 class MedianPool2d(nn.Module):
     def __init__(self, kernel_size=3, stride=1, padding=0, same=False):
         super(MedianPool2d, self).__init__()
@@ -46,14 +47,14 @@ class MedianPool2d(nn.Module):
         Use *keepdim=True* to preserve the dimension after reduction.
         """
         index = torch.argsort(x, dim)
-        deref = [slice(None, None)]*len(x.shape)
-        middle = x.shape[dim]//2
-        even = 1 - x.shape[dim]%2
-        deref[dim] = slice(middle-even, middle+1+even)
+        deref = [slice(None, None)] * len(x.shape)
+        middle = x.shape[dim] // 2
+        even = 1 - x.shape[dim] % 2
+        deref[dim] = slice(middle - even, middle + 1 + even)
         values = x.gather(dim, index[deref])
         return (
-            values.mean(dim, keepdim=keepdim) if even 
-            else values if keepdim 
+            values.mean(dim, keepdim=keepdim) if even
+            else values if keepdim
             else values.squeeze(dim))
 
     def scripy_pad(self, x, padding):
@@ -81,12 +82,18 @@ class MedianPool2d(nn.Module):
                 x = x.squeeze(0)
         return x
 
-class SEDMetrics(nn.Module):
-    def __init__(self, intersection_thd=0.7):
-        super(SEDMetrics, self).__init__()
-        self.intersection_thd = intersection_thd
+
+class PSDSIntersectionMetrics(nn.Module):
+    '''
+    This is copied from SEDMetrics, only for cross-validation metrics.
+    Difference is DTC and GTC instead of longer_pred and shorter_pred to match the test metrics used.
+    '''
+    def __init__(self, dtc_thd=0.5, gtc_thd=0.5):
+        super(PSDSIntersectionMetrics, self).__init__()
+        self.dtc_thd = dtc_thd
+        self.gtc_thd = gtc_thd
         self.reset_stats()
-    
+
     def reset_stats(self):
         self.tps = 0
         self.fps = 0
@@ -95,7 +102,6 @@ class SEDMetrics(nn.Module):
 
     def compute_truth_table(self, strong_preds, ground_truth):
         with torch.no_grad():
-            
             bsz, num_cls, T = strong_preds.shape
             preds = strong_preds.bool()
             labels = ground_truth.bool()
@@ -105,17 +111,93 @@ class SEDMetrics(nn.Module):
             # Locate each events
             all_events = torch.logical_or(preds, labels).float()
             events_bdry = torch.cat([all_events, torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0)], dim=-1) \
-                - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), all_events], dim=-1)
+                          - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), all_events], dim=-1)
             events_start = torch.argwhere(events_bdry == 1)
             events_end = torch.argwhere(events_bdry == -1)
-        
+
             # Get individual events out from the pred, label, and OR(pred, label)
             pred_full_events = strong_preds[events_start[:, 0], events_start[:, 1], :]
             label_full_events = ground_truth[events_start[:, 0], events_start[:, 1], :]
-            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(idv_event_triu, dim=1, index=events_end[:, -1])).T
+            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(
+                idv_event_triu, dim=1, index=events_end[:, -1])).T
+
+            # Compute PSDS DTC and GTC
+            dtc_compute = (pred_full_events * idv_event_mask).sum(-1) / (
+                    pred_full_events.sum(-1) + 1e-7)  # Detection Tolerance Criterion
+            gtc_compute = (pred_full_events * idv_event_mask).sum(-1) / (
+                    label_full_events.sum(-1) + 1e-7)  # Ground Truth Criterion，这是原来的tp_compute
+
+            dtc_valid = dtc_compute >= self.dtc_thd
+            gtc_valid = gtc_compute >= self.gtc_thd
+
+            # True Positive only if both DTC and GTC hold
+            tp_full = torch.logical_and(dtc_valid, gtc_valid)
+            fp_full = torch.logical_xor(dtc_valid, tp_full).float()
+            fn_full = torch.logical_xor(gtc_valid, tp_full).float()
+            tp_full = tp_full.float()
+
+            return tp_full, fp_full, fn_full, events_start
+
+    def accm_macro_f1(self, strong_preds, ground_truths):
+        _, num_cls, _ = strong_preds.shape
+        cls_eye = torch.eye(num_cls, device=strong_preds.device)
+        tp_full, fp_full, fn_full, events_index = self.compute_truth_table(strong_preds, ground_truths)
+        cls_one_hot = torch.index_select(cls_eye, dim=0, index=events_index[:, 1])
+        cls_tp = tp_full.unsqueeze(0).matmul(cls_one_hot)
+        cls_fp = fp_full.unsqueeze(0).matmul(cls_one_hot)
+        cls_fn = fn_full.unsqueeze(0).matmul(cls_one_hot)
+        self.tps += cls_tp
+        self.fps += cls_fp
+        self.fns += cls_fn
+
+    def compute_macro_f1(self):
+        # 去掉第一个类别NA
+        false_num = self.fps[:, 1:] + self.fns[:, 1:]
+        tp_valid = self.tps[:, 1:]
+        if false_num is 0:
+            false_num += torch.cuda.FloatTensor(1).fill_(1e-7)
+        f_score = tp_valid / (tp_valid + 1 / 2 * false_num)
+        f_score = f_score.nan_to_num(0)
+        self.reset_stats()
+        return f_score.mean()
+
+
+class SEDMetrics(nn.Module):
+    def __init__(self, intersection_thd=0.7):
+        super(SEDMetrics, self).__init__()
+        self.intersection_thd = intersection_thd
+        self.reset_stats()
+
+    def reset_stats(self):
+        self.tps = 0
+        self.fps = 0
+        self.fns = 0
+        self.tns = 0
+
+    def compute_truth_table(self, strong_preds, ground_truth):
+        with torch.no_grad():
+            bsz, num_cls, T = strong_preds.shape
+            preds = strong_preds.bool()
+            labels = ground_truth.bool()
+
+            idv_event_triu = torch.cuda.FloatTensor(T + 1, T).fill_(1).triu().T
+
+            # Locate each events
+            all_events = torch.logical_or(preds, labels).float()
+            events_bdry = torch.cat([all_events, torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0)], dim=-1) \
+                          - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), all_events], dim=-1)
+            events_start = torch.argwhere(events_bdry == 1)
+            events_end = torch.argwhere(events_bdry == -1)
+
+            # Get individual events out from the pred, label, and OR(pred, label)
+            pred_full_events = strong_preds[events_start[:, 0], events_start[:, 1], :]
+            label_full_events = ground_truth[events_start[:, 0], events_start[:, 1], :]
+            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(
+                idv_event_triu, dim=1, index=events_end[:, -1])).T
 
             # Get the cls one-hot according to events
-            tp_compute = (pred_full_events * idv_event_mask).sum(-1) / ((label_full_events * idv_event_mask).sum(-1) + 1e-7)
+            tp_compute = (pred_full_events * idv_event_mask).sum(-1) / (
+                        (label_full_events * idv_event_mask).sum(-1) + 1e-7)
             longer_preds = tp_compute >= self.intersection_thd
             shorter_preds = tp_compute < 1 / self.intersection_thd
             tp_full = torch.logical_and(longer_preds, shorter_preds)
@@ -123,24 +205,24 @@ class SEDMetrics(nn.Module):
             fn_full = torch.logical_xor(shorter_preds, tp_full).float()
             tp_full = tp_full.float()
             return tp_full, fp_full, fn_full, events_start
-            
+
     def compute_tn(self, strong_preds, neg_truths):
         # Similar to truth_table, here the neg_truths is used to compute tns
         # TNs: both pred and neg_truths are true for each frame
         with torch.no_grad():
-            
             bsz, num_cls, T = strong_preds.shape
             idv_event_triu = torch.cuda.FloatTensor(T + 1, T).fill_(1).triu().T
 
             # Locate each events
             events_bdry = torch.cat([neg_truths, torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0)], dim=-1) \
-                - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), neg_truths], dim=-1)
+                          - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), neg_truths], dim=-1)
             events_start = torch.argwhere(events_bdry == 1)
             events_end = torch.argwhere(events_bdry == -1)
-        
+
             # Get individual events out from the pred, label, and OR(pred, label)
             pred_full_events = strong_preds[events_start[:, 0], events_start[:, 1], :]
-            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(idv_event_triu, dim=1, index=events_end[:, -1])).T
+            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(
+                idv_event_triu, dim=1, index=events_end[:, -1])).T
 
             # Get the cls one-hot according to events
             tn_compute = (pred_full_events * idv_event_mask).sum(-1) / idv_event_mask.sum(-1)
@@ -170,12 +252,14 @@ class SEDMetrics(nn.Module):
         self.tps += cls_tp
         self.fps += cls_fp
         self.fns += cls_fn
-    
+
     def compute_macro_f1(self):
-        false_num = self.fps + self.fns
+        # 去掉第一个类别NA
+        false_num = self.fps[:, 1:] + self.fns[:, 1:]
+        tp_valid = self.tps[:, 1:]
         if false_num is 0:
             false_num += torch.cuda.FloatTensor(1).fill_(1e-7)
-        f_score = self.tps / (self.tps + 1 / 2 * (false_num))
+        f_score = tp_valid / (tp_valid + 1 / 2 * false_num)
         f_score = f_score.nan_to_num(0)
         self.reset_stats()
         return f_score.mean()
@@ -225,6 +309,7 @@ class SEDMetrics(nn.Module):
         d_prime = standard_normal.ppf(auc) * math.sqrt(2.0)
         return d_prime
 
+
 def decode_preds(strong_preds, thds, median_filter):
     bsz, cls, T = strong_preds.shape
     # Not implement for multiple thds
@@ -241,6 +326,7 @@ def decode_preds(strong_preds, thds, median_filter):
 
     return smooth_preds
 
+
 def onehot_decode_preds(strong_preds, thds, median_filter):
     # 将原来的decode中manyhot改成onehot，符合多分类使用crossentropyloss的方法，传入thresholds=[0]不使用
     assert thds == [0]
@@ -255,8 +341,9 @@ def onehot_decode_preds(strong_preds, thds, median_filter):
     smooth_preds = median_filter(binary_preds.float())
     return smooth_preds
 
+
 def batched_decode_preds(
-    strong_preds, filenames, encoder, thresholds=[0.5], median_filter=7, pad_indx=None,
+        strong_preds, filenames, encoder, thresholds=[0.5], median_filter=7, pad_indx=None,
 ):
     """ Decode a batch of predictions to dataframes. Each threshold gives a different dataframe and stored in a
     dictionary
@@ -290,6 +377,7 @@ def batched_decode_preds(
             pred["filename"] = Path(filenames[j]).stem + ".wav"
             prediction_dfs[c_th] = pd.concat([prediction_dfs[c_th], pred], ignore_index=True)
     return prediction_dfs
+
 
 def convert_to_event_based(weak_dataframe):
     """ Convert a weakly labeled DataFrame ('filename', 'event_labels') to a DataFrame strongly labeled
@@ -348,7 +436,6 @@ def log_sedeval_metrics(predictions, ground_truth, save_dir=None, label_interest
 
 
 def parse_jams(jams_list, encoder, out_json):
-
     if len(jams_list) == 0:
         raise IndexError("jams list is empty ! Wrong path ?")
 
@@ -380,7 +467,7 @@ def parse_jams(jams_list, encoder, out_json):
                 backgrounds.append(source_file)
             else:  # it is an event
                 if (
-                    sound["value"]["label"] not in encoder.labels
+                        sound["value"]["label"] not in encoder.labels
                 ):  # correct different labels
                     if sound["value"]["label"].startswith("Frying"):
                         sound["value"]["label"] = "Frying"
@@ -394,7 +481,7 @@ def parse_jams(jams_list, encoder, out_json):
                         "filename": source_file,
                         "onset": sound["value"]["event_time"],
                         "offset": sound["value"]["event_time"]
-                        + sound["value"]["event_duration"],
+                                  + sound["value"]["event_duration"],
                         "event_label": sound["value"]["label"],
                     }
                 )
@@ -403,11 +490,12 @@ def parse_jams(jams_list, encoder, out_json):
     with open(out_json, "w") as f:
         json.dump({"backgrounds": backgrounds, "sources": sources}, f, indent=4)
 
+
 def gpu_decode_preds(strong_preds, thresholds, filenames, encoder, median_filter):
     # Init a dataframe per threshold
     bsz, cls, T = strong_preds.shape
     # Not implement for multiple thds
-    thd = torch.cuda.FloatTensor(thresholds).reshape(-1, 1, 1, 1) # [Thds, Bsz, T, Cls]
+    thd = torch.cuda.FloatTensor(thresholds).reshape(-1, 1, 1, 1)  # [Thds, Bsz, T, Cls]
     thd = thd.repeat(1, bsz, cls, T)
     binary_preds = strong_preds > thd
     smooth_preds = median_filter(binary_preds.float())
@@ -418,8 +506,8 @@ def gpu_decode_preds(strong_preds, thresholds, filenames, encoder, median_filter
 def onehot_decode_merge_preds(strong_preds, thresholds, filenames, encoder, median_filter=None):
     # 将原来的decode中manyhot改成onehot，符合多分类使用crossentropyloss的方法，传入thresholds=[0]
     # 和onehot_decode_preds保持一致
-    strong_preds = strong_preds.transpose(0,1).unsqueeze(0) # [T,C] -> [1,C,T]
-    B, C, T = strong_preds.shape # B = 1
+    strong_preds = strong_preds.transpose(0, 1).unsqueeze(0)  # [T,C] -> [1,C,T]
+    B, C, T = strong_preds.shape  # B = 1
 
     # Step 1: 获取每个时间步概率最大的类别索引
     argmax_indices = strong_preds.argmax(dim=1)  # shape: [bsz, T]
@@ -436,5 +524,3 @@ def onehot_decode_merge_preds(strong_preds, thresholds, filenames, encoder, medi
     else:
         prediction_dfs_gpu = encoder.gpu_decode_strong(binary_preds, thresholds, filenames)
     return prediction_dfs_gpu
-
-

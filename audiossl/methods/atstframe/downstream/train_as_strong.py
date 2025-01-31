@@ -30,13 +30,6 @@ time_str = current_time.strftime("%Y-%m-%d_%H-%M")  # 用于此次wandbproject�
 pl.seed_everything(42)  # 当设置45的时候，发现dataloader读取标签出来，抛弓竟然为0，随机种子能够影响数据读取？！
 
 def run(dict_args, pretrained_module, kth_fold, save_path, test_ckpt=""):
-    # 初始化 WandB 运行
-    wandb.init(
-        project=f"audiossl_{time_str}",
-        group="5-fold",  # 将所有实验分组
-        name=f"k_fold_{kth_fold + 1}"  # 每次实验的名称
-    )
-    wandb_logger = WandbLogger()
     os.makedirs(save_path, exist_ok=True)
 
     """extract embedding"""
@@ -105,6 +98,14 @@ def run(dict_args, pretrained_module, kth_fold, save_path, test_ckpt=""):
             classifier=dict_args["classifier"]
         )
     strategy = 'auto' if dict_args["nproc"] == 1 else DDPStrategy(find_unused_parameters=False)
+    # 初始化 WandB 运行
+    if test_ckpt == "":
+        wandb.init(
+            project=f"audiossl_{time_str}",
+            group="5-fold",  # 将所有实验分组
+            name=f"k_fold_{kth_fold + 1}"  # 每次实验的名称
+        )
+    wandb_logger = WandbLogger() if test_ckpt == "" else None
     trainer: Trainer = Trainer(
         strategy=strategy,
         num_sanity_val_steps=3,

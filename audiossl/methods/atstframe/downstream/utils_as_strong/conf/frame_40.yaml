@@ -1,18 +1,16 @@
 data: # change with your paths if different.
   strong_folder: "/20A021/ccomhuqin_seg/data/train/" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
   strong_folder_44k: ""
-  strong_train_k_fold: ["/20A021/ccomhuqin_seg/meta1-1/train/train_common.tsv"]
-#  ["/20A021/ccomhuqin_seg/meta1-1/train/train_fold_1.csv",
-#                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_2.csv",
-#                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_3.csv",
-#                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_4.csv",
-#                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_5.csv"]
-  strong_val_k_fold: ["/20A021/ccomhuqin_seg/meta1-1/val/val_common.tsv"]
-#  ["/20A021/ccomhuqin_seg/meta1-1/val/val_fold_1.csv",
-#                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_2.csv",
-#                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_3.csv",
-#                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_4.csv",
-#                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_5.csv"]
+  strong_train_k_fold: ["/20A021/ccomhuqin_seg/meta1-1/train/train_fold_1_common.tsv",
+                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_2_common.tsv",
+                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_3_common.tsv",
+                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_4_common.tsv",
+                        "/20A021/ccomhuqin_seg/meta1-1/train/train_fold_5_common.tsv"]
+  strong_val_k_fold: ["/20A021/ccomhuqin_seg/meta1-1/val/val_fold_1_common.tsv",
+                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_2_common.tsv",
+                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_3_common.tsv",
+                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_4_common.tsv",
+                         "/20A021/ccomhuqin_seg/meta1-1/val/val_fold_5_common.tsv"]
 #  strong_train_tsv:  "/20A021/ccomhuqin_seg/meta1-1/train/train_common.tsv"
 #  strong_val_tsv: "/20A021/ccomhuqin_seg/meta1-1/val/val_common.tsv"
   test_folder: "/20A021/ccomhuqin_seg/data/eval/" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename

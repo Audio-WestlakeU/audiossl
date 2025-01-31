@@ -53,7 +53,7 @@ def ASStrongDataset(as_strong_conf, split, k_fold=0, transform=None, target_tran
         # -------------------------[ Validation set ]---------------------------
         # Define validation sets
         # Strong dataset 
-        strong_df = pd.read_csv(config["data"]["strong_val_k_fold"][k_fold])
+        strong_df = pd.read_csv(config["data"]["strong_val_k_fold"][k_fold], sep="\t")
         strong_val = StronglyAnnotatedSet(
             config["data"]["test_folder"],
             strong_df,
@@ -68,7 +68,7 @@ def ASStrongDataset(as_strong_conf, split, k_fold=0, transform=None, target_tran
     else:
         # --------------------------[ Training set ]----------------------------
         # Define synthetic train set
-        strong_df = pd.read_csv(config["data"]["strong_train_k_fold"][k_fold])
+        strong_df = pd.read_csv(config["data"]["strong_train_k_fold"][k_fold], sep="\t")
         strong_train = StronglyAnnotatedSet(
             config["data"]["strong_folder"],
             strong_df,

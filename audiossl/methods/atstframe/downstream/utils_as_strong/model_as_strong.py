@@ -17,17 +17,17 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
     onehot_decode_preds,
     MedianPool2d,
     SEDMetrics,
-    gpu_decode_preds
+    gpu_decode_preds, PSDSIntersectionMetrics
 )
 from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
     compute_per_intersection_macro_f1,
     compute_psds_from_operating_points
 )
 
-
 '''
 This file is modified from the dcase baseline code
 '''
+
 
 def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Calls BCE with logits and cast the target one_hot (y) encoding to floating point precision."""
@@ -35,18 +35,18 @@ def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.
 
 
 class LinearHead(nn.Module):
-
     """Linear layer with attention module for DCASE task"""
-    def __init__(self, dim, num_labels=1000,use_norm=True,affine=False):
+
+    def __init__(self, dim, num_labels=1000, use_norm=True, affine=False):
         super().__init__()
         self.num_labels = num_labels
-        self.use_norm=use_norm
+        self.use_norm = use_norm
         if use_norm:
-            self.norm = nn.BatchNorm2d(dim,affine=affine)
+            self.norm = nn.BatchNorm2d(dim, affine=affine)
         self.linear = nn.Linear(dim, num_labels)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
         self.linear.bias.data.zero_()
-        #self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, temp=1):
         # flatten
@@ -80,6 +80,7 @@ class MLPHead(nn.Module):
         x = self.relu(x)
         x = self.classifier(x)
         return x.transpose(1, 2)
+
 
 class FineTuningPLModule(LightningModule):
     def __init__(self,
@@ -129,17 +130,17 @@ class FineTuningPLModule(LightningModule):
             fs=self.config["data"]["fs"],
         )
         # 使用一个bool来开启CrossEntropyLoss，与MERT等finetune对齐
-        if  self.config["train"]["loss"] == 'ce':
+        if self.config["train"]["loss"] == 'ce':
             if self.multi_label:
                 raise Exception('同一个frame多标签的情况下，不能使用CrossEntropyLoss. 这是在datasets.__init__里定义的')
             self.use_ce_loss = True
             self.loss_fn = torch.nn.CrossEntropyLoss(weight=loss_weights)
             print("Using CrossEntropyLoss with weights: ", loss_weights)
-            self.test_psds_buffer = {0: pd.DataFrame()}  # 只用一个0作为替代
-            self.test_results = {'filenames': [], 'predictions': []} # 存储所有predictions
+            self.test_results = {'filenames': [], 'predictions': []}  # 存储所有predictions
         else:
             self.use_ce_loss = False
-            self.loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([5.0, 2.0, 10.0, 5.0, 2.0, 1.5, 1.5, 1.0]))
+            self.loss_fn = torch.nn.BCEWithLogitsLoss(
+                pos_weight=torch.tensor([5.0, 2.0, 10.0, 5.0, 2.0, 1.5, 1.5, 1.0]))
             print("Using BCEWithLogitsLoss...")
             test_n_thresholds = 50
             test_thresholds = np.arange(
@@ -152,11 +153,12 @@ class FineTuningPLModule(LightningModule):
         # buffer for event based scores which we compute using sed-eval
         self.median_filter = MedianPool2d(7, same=True)
         self.sed_metrics_student = SEDMetrics(intersection_thd=0.5)
+        self.psds_metrics = PSDSIntersectionMetrics()
         self.validation_outputs = []
 
         self.lr_scale = lr_scale
 
-    def training_step(self, batch, batch_idx):        
+    def training_step(self, batch, batch_idx):
         if self.freeze_mode:
             self.encoder.eval()
         else:
@@ -176,13 +178,14 @@ class FineTuningPLModule(LightningModule):
     def _calculate_loss(self, strong_pred, labels):
         # 输入的strong_pred, labels: [bsz, cls, T][64, 9, 250]
         # 这里把pred和labels统一成(bsz, T, cls), 默认类别是最后一个维度，就可以使用pos_weight=tensor(num_classes)
-        strong_pred, labels = strong_pred.transpose(1,2), labels.transpose(1, 2) # [bsz, T, cls][64, 250, 9]
-        if not self.use_ce_loss:   # 源代码默认使用bce loss
+        strong_pred, labels = strong_pred.transpose(1, 2), labels.transpose(1, 2)  # [bsz, T, cls][64, 250, 9]
+        if not self.use_ce_loss:  # 源代码默认使用bce loss
             return self.loss_fn(strong_pred, labels)
 
         # 以下是要用CrossEntropyLoss需要做的改动
         # 转化shape: (64, 250, 9) ---> (64, 250) 在ASStrongDataset中使用的是ManyHotEncoder, init确认过了不是multilabel
-        targets_single_label = labels.argmax(dim=-1)  # (64, 250)，在label_dict里，所有的label都是1～8，当都是0的时候，返回的就是第一个index正好对应0无标签
+        targets_single_label = labels.argmax(
+            dim=-1)  # (64, 250)，在label_dict里，所有的label都是1～8，当都是0的时候，返回的就是第一个index正好对应0无标签
         # 展平 logits(strong_pred) 和 targets (labels)
         _B, _T, C = strong_pred.shape
         assert C == self.num_labels
@@ -211,13 +214,18 @@ class FineTuningPLModule(LightningModule):
         preds_flat_np = preds_flat.cpu().numpy()  # 如果张量在 GPU 上，需要先移动到 CPU
         labels_flat_np = labels_flat.cpu().numpy()
 
-        # 计算 F1 Score
-        f1 = f1_score(labels_flat_np, preds_flat_np, average='macro')  # 使用 'macro' 平均
-        accuracy = accuracy_score(labels_flat_np, preds_flat_np)
+        # 剔除 NA 类别的样本
+        na_label = 0
+        non_na_mask = labels_flat_np != na_label  # 创建一个掩码，标记非 NA 样本
+        labels_filtered = labels_flat_np[non_na_mask]  # 过滤掉 NA 样本
+        preds_filtered = preds_flat_np[non_na_mask]  # 过滤掉 NA 样本
+        # 获取有效类别（排除 NA）
+        valid_labels = np.unique(labels_filtered)
 
-        # 使用 classification_report 打印每个类别的详细指标
-        unique_labels = np.unique(np.concatenate([labels_flat_np, preds_flat_np]))
-        report = classification_report(labels_flat_np, preds_flat_np, labels=unique_labels)
+        f1 = f1_score(labels_filtered, preds_filtered, average='macro', labels=valid_labels)  # 使用 'macro' 平均
+        accuracy = accuracy_score(labels_filtered, preds_filtered)
+        report = classification_report(labels_filtered, preds_filtered, labels=valid_labels,
+                                       target_names=["DianG", "PaoG", "Pizz", "Port", "Tremolo", "Trill", "Vibrato"])
 
         return f1, accuracy, report
 
@@ -236,19 +244,23 @@ class FineTuningPLModule(LightningModule):
         x, labels = self.encoder((x, labels))
 
         strong_pred = self.head(x)  # [bsz, cls, T] [64, 9, 250]
-        # 原代码计算sed_metrics
-        decoded_student_strong = onehot_decode_preds(strong_pred, [0], self.median_filter) # [bsz, cls, T]
-        self.sed_metrics_student.accm_macro_f1(decoded_student_strong, labels)
-        # 现在计算framewise
-        self.validation_outputs.append({
-            'preds': strong_pred,  # 预测概率
-            'labels': labels  # 真实标签
-        })
+        # loss
         loss_strong_student = self._calculate_loss(strong_pred, labels)
         self.val_loss.append(loss_strong_student.item())
 
+        # 原代码计算sed_metrics
+        decoded_strong = onehot_decode_preds(strong_pred, [0], self.median_filter)  # [bsz, cls, T]
+        self.sed_metrics_student.accm_macro_f1(decoded_strong, labels)
+        self.psds_metrics.accm_macro_f1(decoded_strong, labels)
+        # 计算framewise
+        self.validation_outputs.append({
+            'preds': decoded_strong,  # 预测概率
+            'labels': labels  # 真实标签
+        })
+
     def on_validation_epoch_end(self):
-        intersection_f1_macro_student = self.sed_metrics_student.compute_macro_f1()
+        sed_intersection_f1_macro = self.sed_metrics_student.compute_macro_f1()
+        psds_intersection_f1_macro = self.psds_metrics.compute_macro_f1()
         val_loss = torch.tensor(np.mean(self.val_loss))
         f1_score, accuracy, report = self._calculate_framewise_metrics()
         print(f'on_validation_epoch_end, epoch {self.current_epoch} classification_report')
@@ -257,7 +269,8 @@ class FineTuningPLModule(LightningModule):
         self.log("val/loss", val_loss)
         self.log("val/f1_score", f1_score)
         self.log("val/accuracy", accuracy)
-        self.log("val/student/intersection_f1_macro", intersection_f1_macro_student)
+        self.log("val/sed_intersection_f1_macro", sed_intersection_f1_macro)
+        self.log("val/psds_intersection_f1_macro", psds_intersection_f1_macro)
 
     def test_step(self, batch, batch_idx):
         self.encoder.eval()
@@ -276,32 +289,14 @@ class FineTuningPLModule(LightningModule):
         self.test_results['filenames'].extend(filenames)
         self.test_results['predictions'].append(strong_pred)
 
-        # decoded_strong = onehot_gpu_decode_preds(
-        #     strong_pred,
-        #     thresholds=list(self.test_psds_buffer.keys()),
-        #     filenames=filenames,
-        #     encoder=self.pred_decoder,
-        #     median_filter=self.median_filter
-        # )
-        # for th in self.test_psds_buffer.keys():
-        #     self.test_psds_buffer[th] = pd.concat([self.test_psds_buffer[th], decoded_strong[th]], ignore_index=True)
-        # # Compute F1 metric
-        # if not self.use_ce_loss:
-        #     mid_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 2]
-        #     self.decoded_05_buffer = pd.concat([self.decoded_05_buffer, decoded_strong[mid_val]], ignore_index=True)
-        #     # use other values instead of mid_val
-        #     quarter_val = list(self.test_psds_buffer.keys())[len(self.test_psds_buffer.keys()) // 4]
-        #     self.decoded_025_buffer = pd.concat([self.decoded_025_buffer, decoded_strong[quarter_val]],ignore_index=True)
-        # return
-
     def on_test_epoch_end(self) -> None:
         # 只保存预测结果csv，评价指标的计算统一到utils_ccom_eval/evaluation.py，与其他方法一起做对比
         save_dir = os.path.join(self.metric_save_dir, "metrics_test")
         os.makedirs(save_dir, exist_ok=True)
         # calculate the metrics
         # Enable parallel computing
-        evaluation.g_parallel=True
-        psds.g_parallel=True
+        evaluation.g_parallel = True
+        psds.g_parallel = True
 
         # save self.decoded_buffer as tsv file, remove NA
         if not self.use_ce_loss:
@@ -318,23 +313,6 @@ class FineTuningPLModule(LightningModule):
             write_results(filenames=self.test_results['filenames'], predictions=self.test_results['predictions'],
                           save_dir=save_dir)
 
-            # merge_preds = torch.cat(self.test_results["predictions"], dim=0)  # 在第一个batch的维度拼接起来
-            # sample_size, C, T = merge_preds.shape
-            # assert sample_size == len(self.test_results["filenames"])
-            # print('predictions after merge: ', merge_preds.shape)
-            # print(self.test_results["filenames"])
-            #
-            # assert list(self.test_psds_buffer.keys()) == [0]
-            # df = self.test_psds_buffer[0]
-            # df_cleaned = df[df['event_label'] != 'NA']
-            # df_cleaned.to_csv(os.path.join(save_dir, "pred_0.csv"), index=False)
-            # print(f"Saved pred_0.csv to {save_dir}.")
-
-            # intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
-            #     {"0": df_cleaned},
-            #     self.config["data"]["test_tsv"],
-            #     self.config["data"]["test_dur"],
-            # )
 
         # print("Intersection F1:", intersection_f1_macro)
         # print("Intersection F1 per category:", f_dict)
@@ -389,19 +367,21 @@ class FineTuningPLModule(LightningModule):
                 self.learning_rate,
                 momentum=0.9,
                 weight_decay=0,
-                )
-            self.mylr_scheduler = cosine_scheduler_epoch(self.learning_rate, 1e-6, self.max_epochs, self.niter_per_epoch, self.warmup_epochs)
-        
+            )
+            self.mylr_scheduler = cosine_scheduler_epoch(self.learning_rate, 1e-6, self.max_epochs,
+                                                         self.niter_per_epoch, self.warmup_epochs)
+
         # Finetune opt
         else:
             if self.lr_scale == 1:
                 optimizer = torch.optim.SGD(
-                list(self.encoder.encoder.parameters()) + list(self.head.parameters()),
-                self.learning_rate,
-                momentum=0.9,
-                weight_decay=0,
+                    list(self.encoder.encoder.parameters()) + list(self.head.parameters()),
+                    self.learning_rate,
+                    momentum=0.9,
+                    weight_decay=0,
                 )
-                self.mylr_scheduler = cosine_scheduler_epoch(self.learning_rate, 1e-6, self.max_epochs, self.niter_per_epoch, self.warmup_epochs)
+                self.mylr_scheduler = cosine_scheduler_epoch(self.learning_rate, 1e-6, self.max_epochs,
+                                                             self.niter_per_epoch, self.warmup_epochs)
             else:
                 print("Using scaling learning rate for ATST models")
                 param_groups, lower_lrs = self.request_param_groups()
@@ -409,13 +389,14 @@ class FineTuningPLModule(LightningModule):
                 param_groups.append({"params": self.head.parameters(), "lr": self.learning_rate})
                 lower_lrs.append(1e-6)
                 self.mylr_scheduler = [
-                    cosine_scheduler_epoch(x["lr"], lower_lrs[i], self.max_epochs, self.niter_per_epoch, self.warmup_epochs) for i, x in enumerate(param_groups)
+                    cosine_scheduler_epoch(x["lr"], lower_lrs[i], self.max_epochs, self.niter_per_epoch,
+                                           self.warmup_epochs) for i, x in enumerate(param_groups)
                 ]
                 optimizer = torch.optim.SGD(
                     param_groups,
                     momentum=0.9,
                     weight_decay=0,
-                    )        
+                )
         return [optimizer]
 
     @staticmethod
@@ -460,7 +441,8 @@ class FineTuningPLModule(LightningModule):
             else:
                 tfm_params[0].append(p)
         tfm_params = list(reversed(tfm_params))
-        tfm_groups = [{"params": tfm_params[i], "lr": self.learning_rate * (self.lr_scale ** i)} for i in range(len(tfm_params))]
+        tfm_groups = [{"params": tfm_params[i], "lr": self.learning_rate * (self.lr_scale ** i)} for i in
+                      range(len(tfm_params))]
         lower_lrs = [1e-6 * (self.lr_scale ** i) for i in range(len(tfm_params))]
-        print("layer-wise learning rate:", [ "{:.3f}".format(x["lr"]) for x in tfm_groups])
+        print("layer-wise learning rate:", ["{:.3f}".format(x["lr"]) for x in tfm_groups])
         return tfm_groups, lower_lrs

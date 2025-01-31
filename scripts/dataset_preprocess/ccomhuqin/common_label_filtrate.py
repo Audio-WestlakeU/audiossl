@@ -7,6 +7,8 @@ from argparse import ArgumentParser
 在Audioset_strong数据集，只有train和eval，没有validation set
 胡琴数据集从train拿出了部分作为validation, eval就是test数据集
 '''
+
+
 def old_implementation(seg_meta_path, labels_to_remove, single_eval_meta_tsv):
     '''
     这个操作有问题，计算common_labels之后，只要有一个样本的label不在common_label里，整个样本都删除
@@ -48,12 +50,14 @@ def old_implementation(seg_meta_path, labels_to_remove, single_eval_meta_tsv):
     val_rm_files = np.unique(
         [filename for filename, label in zip(val_meta["filename"], val_meta["event_label"]) if
          label not in common_labels])
-    eval_rm_files = np.unique([filename for filename, label in zip(eval_inference_meta["filename"], eval_inference_meta["event_label"]) if
-                               label not in common_labels])
+    eval_rm_files = np.unique(
+        [filename for filename, label in zip(eval_inference_meta["filename"], eval_inference_meta["event_label"]) if
+         label not in common_labels])
     eval_gt_rm_files = np.unique(
         [filename for filename, label in zip(eval_gt_meta["filename"], eval_gt_meta["event_label"]) if
          label not in common_labels])
-    print("Train remove: ", len(train_rm_files), " Val remove: ", len(val_rm_files), " Eval remove: ", len(eval_rm_files))
+    print("Train remove: ", len(train_rm_files), " Val remove: ", len(val_rm_files), " Eval remove: ",
+          len(eval_rm_files))
     print("Eval ground-truth(complete) remove: ", len(eval_gt_rm_files))
 
     train_label_mask = np.array([True if x not in train_rm_files else False for x in train_meta["filename"]])
@@ -91,7 +95,6 @@ def main(train_meta_tsv, val_meta_tsv, eval_meta_tsv, eval_gt_meta_tsv, save_com
     for label in labels_to_remove:
         common_labels.remove(label)
 
-    print("Common labels:", common_labels)
     with open(save_common_labels_txt, "w") as f:
         f.write("\n".join(common_labels))
 
@@ -103,6 +106,7 @@ def main(train_meta_tsv, val_meta_tsv, eval_meta_tsv, eval_gt_meta_tsv, save_com
                 print(f"Drop {label} in {row['filename']}")
                 meta = meta.drop(idx)
         meta.to_csv(meta_tsv.replace('.tsv', '_common.tsv'), index=False, sep='\t')
+    return common_labels
 
 
 if __name__ == "__main__":
@@ -110,10 +114,23 @@ if __name__ == "__main__":
     meta_dir = f"/20A021/ccomhuqin_seg/{meta_folder}"
 
     labels_to_remove = {'DTG'}
-    single_eval_meta_tsv = f"/20A021/ccomhuqin/{meta_folder}/eval/eval.tsv" # 这个文件是为了inference之后，拼接回原始测试集的annotation
+    single_eval_meta_tsv = f"/20A021/ccomhuqin/{meta_folder}/eval/eval.tsv"  # 这个文件是为了inference之后，拼接回原始测试集的annotation
+    common_labels_list = []
 
-    main(train_meta_tsv=meta_dir + '/train/train.tsv',
-         val_meta_tsv=meta_dir+'/val/val.tsv',
-         eval_meta_tsv=meta_dir+'/eval/eval.tsv',
-         eval_gt_meta_tsv=single_eval_meta_tsv,
-         save_common_labels_txt=meta_dir+'/common_labels.txt')
+    for i in range(5):
+        train_tsv = meta_dir + f'/train/train_fold_{i + 1}.tsv'
+        val_tsv = meta_dir + f'/val/val_fold_{i + 1}.tsv'
+        common_labels = main(train_meta_tsv=train_tsv,
+                             val_meta_tsv=val_tsv,
+                             eval_meta_tsv=meta_dir + f'/eval/eval.tsv',
+                             eval_gt_meta_tsv=single_eval_meta_tsv,
+                             save_common_labels_txt=meta_dir + '/common_labels.txt')
+        common_labels_list.append(common_labels)
+    print("Check common labels are identical for every fold: ")
+    print(common_labels_list)
+
+    # main(train_meta_tsv=meta_dir + '/train/train.tsv',
+    #      val_meta_tsv=meta_dir+'/val/val.tsv',
+    #      eval_meta_tsv=meta_dir+'/eval/eval.tsv',
+    #      eval_gt_meta_tsv=single_eval_meta_tsv,
+    #      save_common_labels_txt=meta_dir+'/common_labels.txt')
