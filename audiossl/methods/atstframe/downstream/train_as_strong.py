@@ -144,7 +144,7 @@ def parseConfig(configFile):
 
 def get_weights_for_loss(dataloader, param):
     print(f"loss_weight param is {param}")
-    if param == 0.0:
+    if param == 0:
         return None
     # extract labels
     all_labels = []

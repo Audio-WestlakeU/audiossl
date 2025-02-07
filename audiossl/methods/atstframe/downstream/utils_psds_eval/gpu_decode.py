@@ -158,8 +158,19 @@ class PSDSIntersectionMetrics(nn.Module):
             false_num += torch.cuda.FloatTensor(1).fill_(1e-7)
         f_score = tp_valid / (tp_valid + 1 / 2 * false_num)
         f_score = f_score.nan_to_num(0)
-        self.reset_stats()
+        #self.reset_stats()
         return f_score.mean()
+
+    def compute_micro_f1(self):
+        # 计算全局 TP、FP、FN, 去掉第一个类别NA,从1开始
+        tp_total = self.tps[:, 1:].sum()  # 所有类别的 TP 之和
+        fp_total = self.fps[:, 1:].sum()  # 所有类别的 FP 之和
+        fn_total = self.fns[:, 1:].sum()  # 所有类别的 FN 之和
+
+        # 计算 Micro-F1
+        micro_f1 = (2 * tp_total) / (2 * tp_total + fp_total + fn_total + 1e-7)  # 避免除 0
+        #self.reset_stats()
+        return micro_f1
 
 
 class SEDMetrics(nn.Module):

@@ -222,12 +222,13 @@ class FineTuningPLModule(LightningModule):
         # 获取有效类别（排除 NA）
         valid_labels = np.unique(labels_filtered)
 
-        f1 = f1_score(labels_filtered, preds_filtered, average='macro', labels=valid_labels)  # 使用 'macro' 平均
+        macro_f1 = f1_score(labels_filtered, preds_filtered, average='macro', labels=valid_labels)  # 使用 'macro' 平均
+        micro_f1 = f1_score(labels_filtered, preds_filtered, average='micro', labels=valid_labels)
         accuracy = accuracy_score(labels_filtered, preds_filtered)
         report = classification_report(labels_filtered, preds_filtered, labels=valid_labels,
                                        target_names=["DianG", "PaoG", "Pizz", "Port", "Tremolo", "Trill", "Vibrato"])
 
-        return f1, accuracy, report
+        return macro_f1, micro_f1, accuracy, report
 
     def schedule(self):
         for i, param_group in enumerate(self.trainer.optimizers[0].param_groups):
@@ -261,16 +262,20 @@ class FineTuningPLModule(LightningModule):
     def on_validation_epoch_end(self):
         sed_intersection_f1_macro = self.sed_metrics_student.compute_macro_f1()
         psds_intersection_f1_macro = self.psds_metrics.compute_macro_f1()
+        psds_intersection_f1_micro = self.psds_metrics.compute_micro_f1()
+        self.psds_metrics.reset_stats()
         val_loss = torch.tensor(np.mean(self.val_loss))
-        f1_score, accuracy, report = self._calculate_framewise_metrics()
+        macro_f1, micro_f1, accuracy, report = self._calculate_framewise_metrics()
         print(f'on_validation_epoch_end, epoch {self.current_epoch} classification_report')
         print(report)
-        print(f'f1_score: {f1_score}', f'accuracy: {accuracy}')
+        print(f'macro_f1: {macro_f1}, micro_f1: {micro_f1}', f'accuracy: {accuracy}')
         self.log("val/loss", val_loss)
-        self.log("val/f1_score", f1_score)
-        self.log("val/accuracy", accuracy)
+        self.log("val/framewise/macro_f1", macro_f1)
+        self.log("val/framewise/micro_f1", micro_f1)
+        self.log("val/framewise/accuracy", accuracy)
         self.log("val/sed_intersection_f1_macro", sed_intersection_f1_macro)
         self.log("val/psds_intersection_f1_macro", psds_intersection_f1_macro)
+        self.log("val/psds_intersection_f1_micro", psds_intersection_f1_micro)
 
     def test_step(self, batch, batch_idx):
         self.encoder.eval()
