@@ -221,7 +221,9 @@ def run_k_fold(dict_args, pretrained_ckpt_path):
         print(
             f'-----------------------------------------------------Run {k + 1}_fold---------------------------------------------------')
         print("Getting pretrain encoder...")
-        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, finetune_layer=dict_args["finetune_layer"],
+                                                use_last=dict_args["use_last"],
+                                                drop_rate=0.0, attn_drop_rate=0.0)
         print("Freezing/Unfreezing encoder parameters?...", end="")
         if dict_args["freeze_mode"]:
             print("Freeze mode")

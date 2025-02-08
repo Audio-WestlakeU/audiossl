@@ -23,6 +23,7 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
     compute_per_intersection_macro_f1,
     compute_psds_from_operating_points
 )
+from sklearn.metrics import f1_score, accuracy_score, classification_report
 
 '''
 This file is modified from the dcase baseline code
@@ -37,7 +38,7 @@ def binary_cross_entropy_with_logits(x: torch.Tensor, y: torch.Tensor) -> torch.
 class LinearHead(nn.Module):
     """Linear layer with attention module for DCASE task"""
 
-    def __init__(self, dim, num_labels=1000, use_norm=True, affine=False):
+    def __init__(self, dim, num_labels, use_norm=True, affine=False):
         super().__init__()
         self.num_labels = num_labels
         self.use_norm = use_norm
@@ -81,6 +82,34 @@ class MLPHead(nn.Module):
         x = self.classifier(x)
         return x.transpose(1, 2)
 
+class BidirectionalGRUHead(nn.Module):
+    def __init__(self, n_in, num_labels, n_RNN_cell=128, dropout=0, num_layers=2):
+        """
+            Initialization of BidirectionalGRU instance
+        Args:
+            n_in: int, number of input
+            n_hidden: int, number of hidden layers
+            dropout: flat, dropout
+            num_layers: int, number of layers
+        """
+
+        super(BidirectionalGRUHead, self).__init__()
+        self.rnn = nn.GRU(
+            n_in,
+            n_RNN_cell,
+            bidirectional=True,
+            dropout=dropout,
+            batch_first=True,
+            num_layers=num_layers,
+        )
+        self.dropout = nn.Dropout(dropout)
+        self.dense = nn.Linear(n_RNN_cell * 2, num_labels)
+
+    def forward(self, input_feat):
+        recurrent, _ = self.rnn(input_feat)
+        x = self.dropout(recurrent)
+        strong = self.dense(x)  # [bs, frames, nclass]
+        return strong.transpose(1, 2)
 
 class FineTuningPLModule(LightningModule):
     def __init__(self,
@@ -110,6 +139,8 @@ class FineTuningPLModule(LightningModule):
             self.head = LinearHead(encoder.embed_dim, num_labels, use_norm=False, affine=False)
         elif classifier == 'mlp':
             self.head = MLPHead(encoder.embed_dim, num_labels)
+        elif classifier == 'rnn':
+            self.head = BidirectionalGRUHead(encoder.embed_dim, num_labels)
         else:
             raise NotImplementedError(f"{classifier} classifier defined in yaml is not supported. Double check it.")
         self.multi_label = multi_label
@@ -167,7 +198,7 @@ class FineTuningPLModule(LightningModule):
         x, labels, _ = batch
         x, labels = self.encoder((x, labels))
 
-        strong_pred = self.head(x)  # Linear head contains transpose[1,2] #[batch, time, class_num]
+        strong_pred = self.head(x)  # head contains transpose[1,2] #[batch, time, class_num]
 
         # Get weak label for real data
         strong_loss = self._calculate_loss(strong_pred, labels)
@@ -195,7 +226,6 @@ class FineTuningPLModule(LightningModule):
         return self.loss_fn(logits_flat, targets_flat)  # return CrossEntropyLoss
 
     def _calculate_framewise_metrics(self):
-        from sklearn.metrics import f1_score, accuracy_score, classification_report
         # 将所有 batch 的预测和真实标签拼接起来
         strong_pred = torch.cat([x['preds'] for x in self.validation_outputs], dim=0)  # 形状: [sample_size, cls, T]
         labels = torch.cat([x['labels'] for x in self.validation_outputs], dim=0)  # 形状: [sample_size, cls, T]

@@ -14,8 +14,10 @@ batch_size_per_gpu: 64
 max_epochs: 100
 dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/utils_as_strong/conf/frame_40.yaml"
 dataset_name: "ccomhuqin_as_strong" # 在datasets/init.py register新的dataset，因为num_label需要修改
-freeze_mode: False
 num_workers: 4
 loss_weight_param: 0.5  # 0代表没有
-classifier: 'linear' # ['linear', 'mlp']
+classifier: 'mlp' # default is 'linear' ['linear', 'mlp', 'rnn']
 k_fold: 5
+freeze_mode: False  # default is False, 注意只有当这里是False的时候，下面'finetune_layer'参数才有用
+finetune_layer: 'all' # default is 'all'
+use_last: True # default is True, 仅使用最后一层的输出。如果是False，就使用weighted sum of all layers

@@ -7,27 +7,35 @@ from audiossl.methods.atstframe.downstream.transform import FreezingTransform
 class FrameATSTPredModule(pl.LightningModule):
     """This module has been modified for frame-level prediction"""
 
-    def __init__(self, pretrained_ckpt_path, dataset_name="as_strong", **kwargs):
+    def __init__(self, pretrained_ckpt_path, finetune_layer='all', use_last=True, **kwargs):
         super().__init__()
         self.encoder = get_frame_atst(pretrained_ckpt_path, **kwargs)
         self.embed_dim = self.encoder.embed_dim
         self.transform = FreezingTransform(max_len=10)
-        self.last_layer = dataset_name != "as_strong"
+        self.finetune_layer = finetune_layer
+        self.use_last = use_last
+        self.layer_weights = torch.nn.parameter.Parameter(data=torch.ones(12), requires_grad=True)
 
     def forward(self, batch):
         (x, length), y = batch
         x = x.unsqueeze(1)
+        use_n_layer_weights = 1 if self.use_last else 12
         x = self.encoder.get_intermediate_layers(
             x,
             length,
-            1,
+            use_n_layer_weights,
             scene=False
         )
-
-        return x, y
+        if self.use_last:
+            return x.squeeze(-1), y
+        else:  # weighted sum of all layers
+            weights = torch.softmax(self.layer_weights, dim=0)
+            weighted_x = torch.matmul(x, weights)  # matrix multiply
+            return weighted_x, y
 
     def finetune_mode(self):
-        if self.last_layer:
+        if self.finetune_layer == 'last_layer':
+            print("Finetune last layer.")
             self.freeze()
             # Unfreeze last tfm block
             for i, layer in enumerate(self.encoder.blocks):
@@ -37,21 +45,26 @@ class FrameATSTPredModule(pl.LightningModule):
             # Unfreeze last norm layer
             for n, p in self.encoder.norm_frame.named_parameters():
                 p.requires_grad = True
-        else:
+        elif self.finetune_layer == 'all':
+            print("Finetune all layers.")
             for n, p in self.encoder.named_parameters():
                 if "mask_embed" in n:
                     p.requires_grad = False
                 else:
                     p.requires_grad = True
+        else:
+            raise NotImplementedError(f"Finetune mode: {self.finetune_layer} not supported!")
 
     def finetune_mannual_train(self):
-        if self.last_layer:   # for DESED dataset。根据论文，只unfreeze最后一个encoder block, 原因是数据量少，防止overfitting
+        if self.finetune_layer == 'last_layer':   # for DESED dataset。根据论文，只unfreeze最后一个encoder block, 原因是数据量少，防止overfitting
             for i, layer in enumerate(self.encoder.blocks):
                 if i == len(self.encoder.blocks) - 1:
                     layer.train()
             self.encoder.norm_frame.train()
-        else:        # as_strong dataset，确认我的case是这个, 可以对比跑一下上面那个试试
+        elif self.finetune_layer == 'all':        # as_strong dataset，确认我的case是这个, 可以对比跑一下上面那个试试
             self.encoder.train()
+        else:
+            raise NotImplementedError(f"Finetune mode: {self.finetune_layer} not supported!")
 
 def get_frame_atst(pretrained_ckpt_path, **kwargs):
     # get pretrained encoder

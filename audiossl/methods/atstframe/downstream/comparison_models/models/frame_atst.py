@@ -210,7 +210,6 @@ class FrameAST(nn.Module):
                 atts.append(att)
                 return atts
                 # return attention of the last block
-
     def get_intermediate_layers(self, x,length, n=1, scene=True):
         x,_,_,_,_,patch_length = self.prepare_tokens(x,mask_index=None,length=length,mask=False)
         # we return the output tokens from the `n` last blocks
@@ -232,7 +231,7 @@ class FrameAST(nn.Module):
                 else:
                     output.append(norm_x[:,self.nprompt:])
 
-        return torch.cat(output,dim=-1)
+        return torch.stack(output,dim=-1)
 
         
 def FrameAST_small(patch_h=64,patch_w=4,**kwargs):
