@@ -20,14 +20,14 @@ class FrameATSTPredModule(pl.LightningModule):
         (x, length), y = batch
         x = x.unsqueeze(1)
         use_n_layer_weights = 1 if self.use_last else 12
-        x = self.encoder.get_intermediate_layers(
+        x = self.encoder.get_intermediate_layers(   # (64, 64, 1001)
             x,
             length,
             use_n_layer_weights,
             scene=False
-        )
+        )  # (64, 250, 768, 1)
         if self.use_last:
-            return x.squeeze(-1), y
+            return x.squeeze(-1), y   # (64, 250, 768) (64, 7, 250)
         else:  # weighted sum of all layers
             weights = torch.softmax(self.layer_weights, dim=0)
             weighted_x = torch.matmul(x, weights)  # matrix multiply

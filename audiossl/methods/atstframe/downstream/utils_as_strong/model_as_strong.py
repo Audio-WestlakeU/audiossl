@@ -447,6 +447,7 @@ class FineTuningPLModule(LightningModule):
         # Used for FrameATST only
         tfm_params = [[], [], [], [], [], [], [], [], [], [], [], [], [], []]
         for k, p in self.encoder.encoder.named_parameters():
+            # 对于mert来说，是layers.0.
             if "blocks.0." in k:
                 tfm_params[1].append(p)
             elif "blocks.1." in k:

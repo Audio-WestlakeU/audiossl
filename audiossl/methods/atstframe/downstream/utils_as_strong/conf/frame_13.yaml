@@ -1,0 +1,24 @@
+data: # change with your paths if different.
+  strong_folder: "/20A021/ccomhuqin_seg/data/train/" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
+  strong_folder_44k: ""
+  strong_train_k_fold: ["/20A021/CBFdataset_seg/24k/meta/train/train_fold_1_common.tsv",
+                        "/20A021/CBFdataset_seg/24k/meta/train/train_fold_2_common.tsv",
+                        "/20A021/CBFdataset_seg/24k/meta/train/train_fold_3_common.tsv",
+                        "/20A021/CBFdataset_seg/24k/meta/train/train_fold_4_common.tsv",
+                        "/20A021/CBFdataset_seg/24k/meta/train/train_fold_5_common.tsv"]
+  strong_val_k_fold: ["/20A021/CBFdataset_seg/24k/meta/val/val_fold_1_common.tsv",
+                         "/20A021/CBFdataset_seg/24k/meta/val/val_fold_2_common.tsv",
+                         "/20A021/CBFdataset_seg/24k/meta/val/val_fold_3_common.tsv",
+                         "/20A021/CBFdataset_seg/24k/meta/val/val_fold_4_common.tsv",
+                         "/20A021/CBFdataset_seg/24k/meta/val/val_fold_5_common.tsv"]
+  test_folder: "" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
+  test_folder_44k: ""
+  test_tsv: ""
+  test_dur: ""
+  label_dict: "/20A021/CBFdataset_seg/24k/meta/common_labels.txt"
+  audio_max_len: 5
+  fs: 24000
+  net_subsample: 1  # This param define the temporal resolution
+feats:
+  n_filters: 1024  # Change windows size and hop length according to your model setups
+  hop_length: 320

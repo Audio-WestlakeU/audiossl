@@ -4,6 +4,7 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 from audiossl.lightning.frame_datamodules import DownstreamDataModule
 import pytorch_lightning as pl
 from audiossl.methods.atstframe.downstream.comparison_models.distill_atst_module import DistillATSTPredModule
+from audiossl.methods.atstframe.downstream.comparison_models.mert_module import MertPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.ssast_module import SSASTPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.byola_module import BYOLAPredModule
 from audiossl.methods.atstframe.downstream.comparison_models.clip_atst_module import ATSTPredModule
@@ -221,9 +222,10 @@ def run_k_fold(dict_args, pretrained_ckpt_path):
         print(
             f'-----------------------------------------------------Run {k + 1}_fold---------------------------------------------------')
         print("Getting pretrain encoder...")
-        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, finetune_layer=dict_args["finetune_layer"],
-                                                use_last=dict_args["use_last"],
-                                                drop_rate=0.0, attn_drop_rate=0.0)
+        pretrained_module = MertPredModule()
+        # FrameATSTPredModule(pretrained_ckpt_path, finetune_layer=dict_args["finetune_layer"],
+        #                                         use_last=dict_args["use_last"],
+        #                                         drop_rate=0.0, attn_drop_rate=0.0)
         print("Freezing/Unfreezing encoder parameters?...", end="")
         if dict_args["freeze_mode"]:
             print("Freeze mode")

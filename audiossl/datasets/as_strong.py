@@ -45,6 +45,7 @@ def ASStrongDataset(as_strong_conf, split, k_fold=0, transform=None, target_tran
             test_df,
             encoder,
             return_filename=True,
+            fs=config["data"]["fs"],
             pad_to=config["data"]["audio_max_len"]
         )
         return TransformDataset(real_test, transform=transform)
@@ -59,6 +60,7 @@ def ASStrongDataset(as_strong_conf, split, k_fold=0, transform=None, target_tran
             strong_df,
             encoder,
             return_filename=True,
+            fs=config["data"]["fs"],
             pad_to=config["data"]["audio_max_len"],
         )
 
@@ -74,6 +76,7 @@ def ASStrongDataset(as_strong_conf, split, k_fold=0, transform=None, target_tran
             strong_df,
             encoder,
             pad_to=config["data"]["audio_max_len"],
+            fs=config["data"]["fs"],
             return_filename=True
         )
 
