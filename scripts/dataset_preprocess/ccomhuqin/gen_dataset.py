@@ -136,13 +136,11 @@ def gen_eval_tsv(eval_meta_dir):
     get_durations(eval_meta_dir + "/eval.tsv", eval_meta_dir + "/eval_durations.tsv")
 
 
-def gen_eval_seg_tsv(meta_dir):
-    ori_data_dir = "/20A021/ccomhuqin/data/eval"
-    save_meta_tsv = meta_dir + "/eval/eval.tsv"
-    save_data_dir = ori_data_dir.replace('ccomhuqin', 'ccomhuqin_seg')
-    generate_segment_dataset(ori_data_dir, save_data_dir, save_meta_tsv)
+def gen_eval_seg_tsv(ori_audio_dir, save_audio_dir, save_meta_dir):
+    save_meta_tsv = save_meta_dir+"/eval.tsv"
+    generate_segment_dataset(ori_audio_dir, save_audio_dir, save_meta_tsv)
 
-    save_meta_duration_tsv = meta_dir + "/eval/eval_duration.tsv"
+    save_meta_duration_tsv = save_meta_dir + "/eval_duration.tsv"
     get_durations(save_meta_tsv, save_meta_duration_tsv)
 
 def move_to_newfold():
@@ -160,7 +158,7 @@ def move_to_newfold():
             file_count += 2
     print('Copied files: ', file_count)
 
-def gen_train_val_from_fold():
+def gen_train_val_from_fold(seg_meta_dir):
     train_folder = os.path.join(seg_meta_dir, 'train')
     val_folder = os.path.join(seg_meta_dir, 'val')
     for i in range(5):
@@ -190,12 +188,12 @@ def gen_train_val_from_fold():
 
 if __name__ == "__main__":
     STRIDE = 5
-    WINDOW_SIZE = 10
-    TARGET_SR = 16000
+    WINDOW_SIZE = 5
+    TARGET_SR = 24000
     event_label_col = 'PT1-1'
     ori_data_dir = "/20A021/ccomhuqin/data"
-    seg_data_dir = "/20A021/ccomhuqin_seg/data"
-    seg_meta_dir = "/20A021/ccomhuqin_seg/meta1-1"
+    seg_data_dir = "/20A021/ccomhuqin_seg/24k/data"
+    seg_meta_dir = "/20A021/ccomhuqin_seg/24k/meta1-1"
 
     # 1. 生成10s的训练数据和验证数据
     # for k in range(5):
@@ -206,22 +204,21 @@ if __name__ == "__main__":
         #get_durations(save_meta, seg_meta_dir + f"/{split_str}/{split_str}_duration.tsv")
 
     #2. 生成10s的测试数据，用于inference
-    # gen_eval_seg_tsv(meta_dir=seg_meta_dir)
+    # gen_eval_seg_tsv(ori_audio_dir=ori_data_dir+"/eval",
+    #                  save_audio_dir=seg_data_dir+"/eval",
+    #                  save_meta_dir=seg_meta_dir+"/eval")
 
     # 3. 生成仅测试数据的ground_truth标注，用于计算metrics
-    #gen_eval_tsv(eval_meta_dir=ori_meta_dir + "/eval")
+    # 这一步对于不同window_size或者sr都是一样的，只要测试原始数据不变，就不用再次生成。
+    # gen_eval_tsv(eval_meta_dir="/20A021/ccomhuqin/meta1-1/eval")
 
     # 4. 检查所有的标注技法的时长，为了排除错误标注和裁剪的问题
-    #min_label_sec = 0.04  # 据统计，最短的是DTG最短时长在0.04-0.05之间。其他小于0.04的大部分是有边缘裁剪，和手工错标。
-    # meta_tsvs = [seg_meta_dir+"/train/train.tsv",
-    #              seg_meta_dir+"/val/val.tsv",
-    #              seg_meta_dir+"/eval/eval.tsv"
-    #              ]
+    # min_label_sec = 0.04  # 据统计，最短的是DTG最短时长在0.04-0.05之间。其他小于0.04的大部分是有边缘裁剪，和手工错标。
     # for k in range(5):
     #     meta_tsv = seg_meta_dir + f"/fold_{k+1}.tsv"
     #     check_onset_offset(min_label_sec, meta_tsv)
 
     # 5. 把fold5个文件组合成5组train_valid
-    gen_train_val_from_fold()
+    gen_train_val_from_fold(seg_meta_dir=seg_meta_dir)
 
 

@@ -110,11 +110,11 @@ def main(train_meta_tsv, val_meta_tsv, eval_meta_tsv, eval_gt_meta_tsv, save_com
 
 
 if __name__ == "__main__":
-    meta_folder = "meta1-1"
+    meta_folder = "24k/meta1-1"
     meta_dir = f"/20A021/ccomhuqin_seg/{meta_folder}"
 
     labels_to_remove = {'DTG'}
-    single_eval_meta_tsv = f"/20A021/ccomhuqin/{meta_folder}/eval/eval.tsv"  # 这个文件是为了inference之后，拼接回原始测试集的annotation
+    single_eval_meta_tsv = f"/20A021/ccomhuqin/meta1-1/eval/eval.tsv"  # 这个文件是为了inference之后，拼接回原始测试集的annotation
     common_labels_list = []
 
     for i in range(5):
@@ -127,7 +127,8 @@ if __name__ == "__main__":
                              save_common_labels_txt=meta_dir + '/common_labels.txt')
         common_labels_list.append(common_labels)
     print("Check common labels are identical for every fold: ")
-    print(common_labels_list)
+    for item in common_labels_list:
+        print(item)
 
     # main(train_meta_tsv=meta_dir + '/train/train.tsv',
     #      val_meta_tsv=meta_dir+'/val/val.tsv',

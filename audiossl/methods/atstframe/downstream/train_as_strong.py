@@ -195,10 +195,7 @@ def main():
     dict_args.update(parseConfig(
         configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_atst.yaml"))
     print("Target task:", dict_args["dataset_name"])
-    arch, pretrained_ckpt_path = dict_args["arch"], dict_args["pretrained_ckpt_path"]
-    if arch != "frameatst":
-        raise NotImplementedError(
-            "Only support frameatst module for code simplification. Please check original codebase if you need other implementations.")
+    pretrained_ckpt_path = dict_args["arch"], dict_args["pretrained_ckpt_path"]
 
     # 训练模式
     if "test_from_checkpoints" not in dict_args:
@@ -218,14 +215,17 @@ def run_k_fold(dict_args, pretrained_ckpt_path):
     assert (len(train_data_list) == dict_args['k_fold'])
     assert (len(val_data_list) == dict_args['k_fold'])
     best_val_loss_list = []
+    arch = dict_args['arch']
     for k in range(dict_args['k_fold']):
         print(
             f'-----------------------------------------------------Run {k + 1}_fold---------------------------------------------------')
         print("Getting pretrain encoder...")
-        pretrained_module = MertPredModule()
-        # FrameATSTPredModule(pretrained_ckpt_path, finetune_layer=dict_args["finetune_layer"],
-        #                                         use_last=dict_args["use_last"],
-        #                                         drop_rate=0.0, attn_drop_rate=0.0)
+        if arch == "frameatst":
+            pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+        elif arch == "mert":
+            pretrained_module = MertPredModule()
+        else:
+            raise NotImplementedError(f"{arch} not supported!")
         print("Freezing/Unfreezing encoder parameters?...", end="")
         if dict_args["freeze_mode"]:
             print("Freeze mode")
@@ -243,8 +243,14 @@ def predict_k_fold(dict_args, pretrained_ckpt_path):
     print(f"Predict {dict_args['k_fold']}_fold checkpoints and generate results.")
     test_checkpoints = dict_args["test_from_checkpoints"]
     assert (len(test_checkpoints) == dict_args['k_fold'])
+    arch = dict_args['arch']
     for k in range(dict_args['k_fold']):
-        pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+        if arch == 'atst_frame':
+            pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+        elif arch == 'mert':
+            pretrained_module = MertPredModule()
+        else:
+            raise NotImplementedError(f"{arch} not supported!")
         pretrained_module.eval()  # 这里是新加的，原来是统一和train相同，但是在test模式下，只需要eval就可以，验证一下是否正确
         ckpt = test_checkpoints[k]
         print(f"Predict using {ckpt}......")

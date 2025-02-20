@@ -160,26 +160,12 @@ class FineTuningPLModule(LightningModule):
             net_pooling=self.config["data"]["net_subsample"],
             fs=self.config["data"]["fs"],
         )
-        # 使用一个bool来开启CrossEntropyLoss，与MERT等finetune对齐
-        if self.config["train"]["loss"] == 'ce':
-            if self.multi_label:
-                raise Exception('同一个frame多标签的情况下，不能使用CrossEntropyLoss. 这是在datasets.__init__里定义的')
-            self.use_ce_loss = True
-            self.loss_fn = torch.nn.CrossEntropyLoss(weight=loss_weights)
-            print("Using CrossEntropyLoss with weights: ", loss_weights)
-            self.test_results = {'filenames': [], 'predictions': []}  # 存储所有predictions
-        else:
-            self.use_ce_loss = False
-            self.loss_fn = torch.nn.BCEWithLogitsLoss(
-                pos_weight=torch.tensor([5.0, 2.0, 10.0, 5.0, 2.0, 1.5, 1.5, 1.0]))
-            print("Using BCEWithLogitsLoss...")
-            test_n_thresholds = 50
-            test_thresholds = np.arange(
-                1 / (test_n_thresholds * 2), 1, 1 / test_n_thresholds
-            )
-            self.test_psds_buffer = {k: pd.DataFrame() for k in test_thresholds}
-            self.decoded_05_buffer = pd.DataFrame()
-            self.decoded_025_buffer = pd.DataFrame()
+        # CrossEntropyLoss
+        if self.multi_label:
+            raise Exception('同一个frame多标签的情况下，不能使用CrossEntropyLoss. 这是在datasets.__init__里定义的')
+        self.loss_fn = torch.nn.CrossEntropyLoss(weight=loss_weights)
+        print("Using CrossEntropyLoss with weights: ", loss_weights)
+        self.test_results = {'filenames': [], 'predictions': []}  # 存储所有predictions
 
         # buffer for event based scores which we compute using sed-eval
         self.median_filter = MedianPool2d(7, same=True)
@@ -210,9 +196,6 @@ class FineTuningPLModule(LightningModule):
         # 输入的strong_pred, labels: [bsz, cls, T][64, 9, 250]
         # 这里把pred和labels统一成(bsz, T, cls), 默认类别是最后一个维度，就可以使用pos_weight=tensor(num_classes)
         strong_pred, labels = strong_pred.transpose(1, 2), labels.transpose(1, 2)  # [bsz, T, cls][64, 250, 9]
-        if not self.use_ce_loss:  # 源代码默认使用bce loss
-            return self.loss_fn(strong_pred, labels)
-
         # 以下是要用CrossEntropyLoss需要做的改动
         # 转化shape: (64, 250, 9) ---> (64, 250) 在ASStrongDataset中使用的是ManyHotEncoder, init确认过了不是multilabel
         targets_single_label = labels.argmax(
@@ -334,18 +317,7 @@ class FineTuningPLModule(LightningModule):
         psds.g_parallel = True
 
         # save self.decoded_buffer as tsv file, remove NA
-        if not self.use_ce_loss:
-            self.decoded_05_buffer.to_csv(os.path.join(save_dir, "pred_0.5.csv"), index=False)
-            self.decoded_025_buffer.to_csv(os.path.join(save_dir, "pred_0.25.csv"), index=False)
-            print(f"Saved pred_0.5.csv, pred_0.25.csv to {save_dir}.")
-
-            # intersection_f1_macro, f_dict = compute_per_intersection_macro_f1(
-            #     {"0.5": self.decoded_05_buffer},
-            #     self.config["data"]["test_tsv"],
-            #     self.config["data"]["test_dur"],
-            # )
-        else:
-            write_results(filenames=self.test_results['filenames'], predictions=self.test_results['predictions'],
+        write_results(filenames=self.test_results['filenames'], predictions=self.test_results['predictions'],
                           save_dir=save_dir)
 
 
