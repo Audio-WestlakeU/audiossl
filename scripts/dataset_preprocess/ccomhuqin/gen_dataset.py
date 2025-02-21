@@ -189,18 +189,18 @@ def gen_train_val_from_fold(seg_meta_dir):
 if __name__ == "__main__":
     STRIDE = 5
     WINDOW_SIZE = 5
-    TARGET_SR = 24000
+    TARGET_SR = 16000
     event_label_col = 'PT1-1'
     ori_data_dir = "/20A021/ccomhuqin/data"
-    seg_data_dir = "/20A021/ccomhuqin_seg/24k/data"
-    seg_meta_dir = "/20A021/ccomhuqin_seg/24k/meta1-1"
+    seg_data_dir = "/20A021/ccomhuqin_seg/16k_5/data"
+    seg_meta_dir = "/20A021/ccomhuqin_seg/16k_5/meta1-1"
 
     # 1. 生成10s的训练数据和验证数据
     # for k in range(5):
-    #     save_meta = seg_meta_dir + f"/fold_{k+1}.tsv"
-    #     generate_segment_dataset(ori_audio_dir=ori_data_dir + f"/fold_{k + 1}",
-    #                              seg_audio_dir=seg_data_dir + f"/fold_{k + 1}",
-    #                              save_meta=save_meta)
+        # save_meta = seg_meta_dir + f"/fold_{k+1}.tsv"
+        # generate_segment_dataset(ori_audio_dir=ori_data_dir + f"/fold_{k + 1}",
+        #                          seg_audio_dir=seg_data_dir + f"/fold_{k + 1}",
+        #                          save_meta=save_meta)
         #get_durations(save_meta, seg_meta_dir + f"/{split_str}/{split_str}_duration.tsv")
 
     #2. 生成10s的测试数据，用于inference

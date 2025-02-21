@@ -217,40 +217,6 @@ class SEDMetrics(nn.Module):
             tp_full = tp_full.float()
             return tp_full, fp_full, fn_full, events_start
 
-    def compute_tn(self, strong_preds, neg_truths):
-        # Similar to truth_table, here the neg_truths is used to compute tns
-        # TNs: both pred and neg_truths are true for each frame
-        with torch.no_grad():
-            bsz, num_cls, T = strong_preds.shape
-            idv_event_triu = torch.cuda.FloatTensor(T + 1, T).fill_(1).triu().T
-
-            # Locate each events
-            events_bdry = torch.cat([neg_truths, torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0)], dim=-1) \
-                          - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), neg_truths], dim=-1)
-            events_start = torch.argwhere(events_bdry == 1)
-            events_end = torch.argwhere(events_bdry == -1)
-
-            # Get individual events out from the pred, label, and OR(pred, label)
-            pred_full_events = strong_preds[events_start[:, 0], events_start[:, 1], :]
-            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(
-                idv_event_triu, dim=1, index=events_end[:, -1])).T
-
-            # Get the cls one-hot according to events
-            tn_compute = (pred_full_events * idv_event_mask).sum(-1) / idv_event_mask.sum(-1)
-            tn_full = (tn_compute == 1).float()
-            return tn_full, events_start
-
-    def compute_avg_f1(self, strong_preds, ground_truths):
-        bsz, _, _ = strong_preds.shape
-        event_eye = torch.eye(bsz, device=strong_preds.device)
-        tps, _, _, events_index = self.compute_truth_table(strong_preds, ground_truths)
-        event_to_clip = torch.index_select(event_eye, dim=0, index=events_index[:, 0])
-        tp_clip = tps.unsqueeze(0).matmul(event_to_clip)
-        tp_fn_fp_clip = event_to_clip.sum(0)
-        # F1 score accoding to clips
-        f_score = tp_clip / (1 / 2 * tp_clip + 1 / 2 * tp_fn_fp_clip)
-        f_score = f_score.nan_to_num(0)
-        return f_score.mean()
 
     def accm_macro_f1(self, strong_preds, ground_truths):
         _, num_cls, _ = strong_preds.shape
@@ -274,6 +240,42 @@ class SEDMetrics(nn.Module):
         f_score = f_score.nan_to_num(0)
         self.reset_stats()
         return f_score.mean()
+
+
+    def compute_avg_f1(self, strong_preds, ground_truths):
+        bsz, _, _ = strong_preds.shape
+        event_eye = torch.eye(bsz, device=strong_preds.device)
+        tps, _, _, events_index = self.compute_truth_table(strong_preds, ground_truths)
+        event_to_clip = torch.index_select(event_eye, dim=0, index=events_index[:, 0])
+        tp_clip = tps.unsqueeze(0).matmul(event_to_clip)
+        tp_fn_fp_clip = event_to_clip.sum(0)
+        # F1 score accoding to clips
+        f_score = tp_clip / (1 / 2 * tp_clip + 1 / 2 * tp_fn_fp_clip)
+        f_score = f_score.nan_to_num(0)
+        return f_score.mean()
+
+    def compute_tn(self, strong_preds, neg_truths):
+        # Similar to truth_table, here the neg_truths is used to compute tns
+        # TNs: both pred and neg_truths are true for each frame
+        with torch.no_grad():
+            bsz, num_cls, T = strong_preds.shape
+            idv_event_triu = torch.cuda.FloatTensor(T + 1, T).fill_(1).triu().T
+
+            # Locate each events
+            events_bdry = torch.cat([neg_truths, torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0)], dim=-1) \
+                          - torch.cat([torch.cuda.FloatTensor(bsz, num_cls, 1).fill_(0), neg_truths], dim=-1)
+            events_start = torch.argwhere(events_bdry == 1)
+            events_end = torch.argwhere(events_bdry == -1)
+
+            # Get individual events out from the pred, label, and OR(pred, label)
+            pred_full_events = strong_preds[events_start[:, 0], events_start[:, 1], :]
+            idv_event_mask = (torch.index_select(idv_event_triu, dim=1, index=events_start[:, -1]) - torch.index_select(
+                idv_event_triu, dim=1, index=events_end[:, -1])).T
+
+            # Get the cls one-hot according to events
+            tn_compute = (pred_full_events * idv_event_mask).sum(-1) / idv_event_mask.sum(-1)
+            tn_full = (tn_compute == 1).float()
+            return tn_full, events_start
 
     def accm_auc(self, strong_preds, pos_truths, neg_truths):
         # strong_preds: [thds, bsz, cls, T]

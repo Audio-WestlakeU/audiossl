@@ -26,7 +26,7 @@ class MertTransform:
 
 
 class MertPredModule(pl.LightningModule):
-    def __init__(self, pretrained_model_path="/20A021/compare_with/mert/pretrained_model/MERT-v1-95M",
+    def __init__(self, pretrained_model_path="/20A021/compare_with/mert/pretrained_model/MERT-v0",
                  freeze_all=False, use_last=True):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(pretrained_model_path, local_files_only=True, trust_remote_code=True)
@@ -35,7 +35,7 @@ class MertPredModule(pl.LightningModule):
         self.freeze_all = freeze_all
         self.use_last = use_last
         self.layer_weights = torch.nn.parameter.Parameter(data=torch.ones(13), requires_grad=True)
-        self.feat_mean = nn.AvgPool1d(3, 3)  # 3帧合并一帧
+        self.feat_mean = nn.AvgPool1d(2, 2)  # 2帧合并一帧
 
     def forward(self, batch):
         (x, length), y = batch  # x: 64, 240000   length: [64] value都是240000  y: 64, 7, 375

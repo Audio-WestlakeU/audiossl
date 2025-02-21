@@ -195,7 +195,7 @@ def main():
     dict_args.update(parseConfig(
         configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_atst.yaml"))
     print("Target task:", dict_args["dataset_name"])
-    pretrained_ckpt_path = dict_args["arch"], dict_args["pretrained_ckpt_path"]
+    pretrained_ckpt_path = dict_args["pretrained_ckpt_path"]
 
     # 训练模式
     if "test_from_checkpoints" not in dict_args:

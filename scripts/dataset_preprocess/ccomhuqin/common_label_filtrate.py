@@ -110,7 +110,7 @@ def main(train_meta_tsv, val_meta_tsv, eval_meta_tsv, eval_gt_meta_tsv, save_com
 
 
 if __name__ == "__main__":
-    meta_folder = "24k/meta1-1"
+    meta_folder = "16k_5/meta1-1"
     meta_dir = f"/20A021/ccomhuqin_seg/{meta_folder}"
 
     labels_to_remove = {'DTG'}
