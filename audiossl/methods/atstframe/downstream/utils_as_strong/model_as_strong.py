@@ -111,6 +111,19 @@ class BidirectionalGRUHead(nn.Module):
         strong = self.dense(x)  # [bs, frames, nclass]
         return strong.transpose(1, 2)
 
+
+class FocalLoss(nn.Module):
+    def __init__(self, loss_fn, gamma=1.5):
+        super(FocalLoss, self).__init__()
+        self.loss_fn = loss_fn
+        self.gamma = gamma
+
+    def forward(self, logits, targets):
+        ce_loss = self.loss_fn(logits, targets)
+        p = torch.exp(-ce_loss)
+        loss = (1-p) ** self.gamma * ce_loss
+        return loss.mean()
+
 class FineTuningPLModule(LightningModule):
     def __init__(self,
                  encoder,
@@ -125,7 +138,8 @@ class FineTuningPLModule(LightningModule):
                  freeze_mode=False,
                  lr_scale=1.0,
                  loss_weights=None,
-                 classifier='linear'):
+                 classifier='linear',
+                 focal_gamma=0):
         super().__init__()
         self.freeze_mode = freeze_mode
         self.learning_rate = learning_rate
@@ -163,7 +177,13 @@ class FineTuningPLModule(LightningModule):
         # CrossEntropyLoss
         if self.multi_label:
             raise Exception('同一个frame多标签的情况下，不能使用CrossEntropyLoss. 这是在datasets.__init__里定义的')
-        self.loss_fn = torch.nn.CrossEntropyLoss(weight=loss_weights)
+        loss_fn = torch.nn.CrossEntropyLoss(weight=loss_weights)
+        if focal_gamma == 0:
+            print("Do NOT use focal loss!")
+            self.loss_fn = loss_fn
+        else:
+            print(f"Use focal loss of gamma={focal_gamma}")
+            self.loss_fn = FocalLoss(loss_fn=loss_fn, gamma=focal_gamma)
         print("Using CrossEntropyLoss with weights: ", loss_weights)
         self.test_results = {'filenames': [], 'predictions': []}  # 存储所有predictions
 

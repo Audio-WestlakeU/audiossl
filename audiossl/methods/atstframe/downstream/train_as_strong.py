@@ -96,7 +96,8 @@ def run(dict_args, pretrained_module, kth_fold, save_path, test_ckpt=""):
             freeze_mode=dict_args["freeze_mode"],
             lr_scale=dict_args["lr_scale"],
             loss_weights=loss_weights,
-            classifier=dict_args["classifier"]
+            classifier=dict_args["classifier"],
+            focal_gamma=dict_args['focal_gamma']
         )
     strategy = 'auto' if dict_args["nproc"] == 1 else DDPStrategy(find_unused_parameters=False)
     # 初始化 WandB 运行
@@ -221,7 +222,10 @@ def run_k_fold(dict_args, pretrained_ckpt_path):
             f'-----------------------------------------------------Run {k + 1}_fold---------------------------------------------------')
         print("Getting pretrain encoder...")
         if arch == "frameatst":
-            pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+            pretrained_module = FrameATSTPredModule(pretrained_ckpt_path,
+                                                    finetune_layer=dict_args["finetune_layer"],
+                                                    use_last=dict_args["use_last"],
+                                                    drop_rate=0.0, attn_drop_rate=0.0)
         elif arch == "mert":
             pretrained_module = MertPredModule()
         else:
@@ -246,7 +250,10 @@ def predict_k_fold(dict_args, pretrained_ckpt_path):
     arch = dict_args['arch']
     for k in range(dict_args['k_fold']):
         if arch == 'atst_frame':
-            pretrained_module = FrameATSTPredModule(pretrained_ckpt_path, drop_rate=0.0, attn_drop_rate=0.0)
+            pretrained_module = FrameATSTPredModule(pretrained_ckpt_path,
+                                                    finetune_layer=dict_args["finetune_layer"],
+                                                    use_last=dict_args["use_last"],
+                                                    drop_rate=0.0, attn_drop_rate=0.0)
         elif arch == 'mert':
             pretrained_module = MertPredModule()
         else:

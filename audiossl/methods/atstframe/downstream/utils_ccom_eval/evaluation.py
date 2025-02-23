@@ -205,7 +205,7 @@ def metrics_from_wandb(project_name=""):
 
 
 if __name__ == "__main__":
-    metrics_from_wandb(project_name="audiossl_2025-02-21_13-00")
+    metrics_from_wandb(project_name="audiossl_2025-02-23_15-01")
     exit(0)
     # ori_test_tsv = "/20A021/ccomhuqin/meta1-1/eval/eval_rm_intersect.tsv"
     # ori_test_dur = "/20A021/ccomhuqin/meta1-1/eval/eval_durations.tsv"

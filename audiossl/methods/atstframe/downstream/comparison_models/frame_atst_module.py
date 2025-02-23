@@ -14,6 +14,10 @@ class FrameATSTPredModule(pl.LightningModule):
         self.transform = FreezingTransform(max_len=10)
         self.finetune_layer = finetune_layer
         self.use_last = use_last
+        if self.use_last:
+            print("Use last layer's output")
+        else:
+            print(f"Use weighted sum of all layers' output")
         self.layer_weights = torch.nn.parameter.Parameter(data=torch.ones(12), requires_grad=True)
 
     def forward(self, batch):
