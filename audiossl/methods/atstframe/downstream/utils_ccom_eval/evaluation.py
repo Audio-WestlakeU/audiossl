@@ -1,10 +1,13 @@
-from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import compute_per_intersection_macro_f1, \
-    compute_per_intersection_metrics
+import yaml
+
+from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import compute_per_intersection_metrics, \
+    compute_per_intersection_metrics_ccomhuqin
+from audiossl.methods.atstframe.downstream.utils_ccom_eval.evaluation_measures import compute_sed_eval_metrics
 import pandas as pd
 import numpy as np
 import os
-from sklearn.metrics import accuracy_score, f1_score, classification_report
-
+from sklearn.metrics import accuracy_score, f1_score, classification_report, precision_score, recall_score, confusion_matrix
+import matplotlib.pyplot as plt
 
 def generate_pred_tsv_yolo():
     pred_path = "/20A021/compare_with/yolo/kfold0411_fold1_all"
@@ -52,27 +55,54 @@ def remove_DTG(pred_tsv_path):
     df.to_csv(pred_tsv_path.replace('.csv', '_remove_DTG.csv'), index=False)
 
 
-def compute_metrics(threshold, pred_csv, gt_tsv, gt_dur, save_path=None):
-    import json
+def compute_eventwise_metrics(pred_csv, gt_tsv, gt_dur, save_dir=None):
     pred_df = pd.read_csv(pred_csv)
 
-    # threshold is different for different models. Choose 0.25 for yolo
-    # Mert use single-label cross_entropy prediction loss, no threshold.
-    psds_metrics_mean, p_per_class_th, r_per_class_th, f_per_class_th = compute_per_intersection_metrics(
-        {threshold: pred_df}, gt_tsv, gt_dur
-    )
-    if save_path is not None:
-        with open(save_path + f'/results_metrics_{threshold}.txt', 'w') as data:
-            data.writelines("Mean_metrics:")
-            data.write(json.dumps(psds_metrics_mean))
-            data.write(json.dumps(psds_metrics_mean))
-            data.writelines("Precision_per_class:")
-            data.write(json.dumps(p_per_class_th, allow_nan=True))
-            data.writelines("Recall_per_class:")
-            data.write(json.dumps(r_per_class_th, allow_nan=True))
-            data.writelines("Fscore_per_class:")
-            data.write(json.dumps(f_per_class_th, allow_nan=True))
+    # 新加了一个ccomhuqin版，没有threshold
+    intersection_structured_metrics = compute_per_intersection_metrics_ccomhuqin(pred_df, gt_tsv, gt_dur)
+    # 保存为YAML文件
+    def numpy_representer(dumper, data):
+        """处理numpy.float64类型"""
+        return dumper.represent_float(float(data))
+    yaml.add_representer(np.float64, numpy_representer)
+    with open(os.path.join(save_dir, 'intersection_based_metrics.yaml'), "w", encoding="utf-8") as f:
+        yaml.dump(intersection_structured_metrics, f, default_flow_style=False, allow_unicode=True)
 
+    event_macro_f1 = compute_event_metrics(pred_df, gt_tsv, save_dir)[0]
+
+
+def compute_event_metrics(predictions, ground_truth, save_dir=None):
+    """ Return the set of metrics from sed_eval
+        Args:
+            predictions: pd.DataFrame, the dataframe of predictions.
+            ground_truth: pd.DataFrame, the dataframe of groundtruth.
+            save_dir: str, path to the folder where to save the event and segment based metrics outputs.
+
+        Returns:
+            tuple, event-based macro-F1 and micro-F1, segment-based macro-F1 and micro-F1
+        """
+
+    if predictions.empty:
+        return 0.0, 0.0, 0.0, 0.0
+
+    gt = pd.read_csv(ground_truth, sep="\t")
+
+    event_res, segment_res = compute_sed_eval_metrics(predictions, gt)
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        with open(os.path.join(save_dir, "event_f1.txt"), "w") as f:
+            f.write(str(event_res))
+
+        # with open(os.path.join(save_dir, "segment_f1.txt"), "w") as f:
+        #     f.write(str(segment_res))
+
+    return (
+        event_res.results()["class_wise_average"]["f_measure"]["f_measure"],
+        event_res.results()["overall"]["f_measure"]["f_measure"],
+        # segment_res.results()["class_wise_average"]["f_measure"]["f_measure"],
+        # segment_res.results()["overall"]["f_measure"]["f_measure"],
+    )
 
 def rename_gt_atst(test_tsv, test_dur, save_test_tsv, save_test_dur):
     df = pd.read_csv(test_tsv, sep="\t")
@@ -121,6 +151,12 @@ def compute_framewise_metrics(pred_csv, gt_tsv, dur_tsv, save_path):
     all_frame_labels_gt = np.array(all_frame_labels_gt)
     all_frame_labels_pred = np.array(all_frame_labels_pred)
 
+    # 画混淆矩阵
+    plot_confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, save_path)
+
+    # 计算mir_eval framewise metrics
+    compute_mir_eval(all_frame_labels_gt, all_frame_labels_pred, save_path=save_path)
+
     # 使用 classification_report 打印每个类别的详细指标
     unique_labels = np.unique(np.concatenate([all_frame_labels_gt, all_frame_labels_pred]))
     report = classification_report(all_frame_labels_gt, all_frame_labels_pred, labels=unique_labels)
@@ -132,13 +168,88 @@ def compute_framewise_metrics(pred_csv, gt_tsv, dur_tsv, save_path):
     all_frame_labels_gt_numeric = np.array([label_to_index[label] for label in all_frame_labels_gt])
     all_frame_labels_pred_numeric = np.array([label_to_index[label] for label in all_frame_labels_pred])
     global_f1 = f1_score(all_frame_labels_gt_numeric, all_frame_labels_pred_numeric, average="macro")
-    print(f"Mean accuracy: {global_accuracy}. Macro F1: {global_f1}")
+    #print(f"Mean accuracy: {global_accuracy}. Macro F1: {global_f1}")
     # 保存到文件
     with open(os.path.join(save_path, "framewise_metrics.txt"), mode="w") as file:
         file.write(report)
         file.write("\n")
         file.write(f"Mean accuracy: {global_accuracy}. Macro F1: {global_f1}")
     print(f"Classification report and macro F1 saved to {save_path}")
+
+
+def plot_confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, save_path):
+    # 计算混淆矩阵并保存
+    unique_labels = ['DianG', 'PaoG', 'Pizz', 'Port', 'Tremolo', 'Trill', 'Vibrato', 'NA']
+    conf_matrix = confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, labels=unique_labels)
+    conf_matrix_ratio = conf_matrix.astype('float') / conf_matrix.sum(axis=1)[:, np.newaxis]
+
+    # 创建图形
+    plt.figure(figsize=(9, 6))  # 可以根据需要调整图的大小
+
+    # 绘制热力图
+    cax = plt.matshow(conf_matrix_ratio, cmap='Blues')  # 使用 matshow 来绘制矩阵
+    # plt.colorbar(cax)  # 添加颜色条
+    # 添加文本注释
+    for i in range(len(unique_labels)):
+        for j in range(len(unique_labels)):
+            plt.text(j, i, f"{conf_matrix_ratio[i, j]:.2f}", ha='center', va='center', color='black', fontsize=7)
+
+    # 设置标题和标签
+    #plt.title('Confusion Matrix', fontsize=12)
+    plt.xlabel('Predicted Labels', fontsize=10)
+    plt.ylabel('True Labels', fontsize=10)
+
+    # 设置坐标轴刻度
+    plt.xticks(np.arange(len(unique_labels)), unique_labels, fontsize=8)
+    plt.yticks(np.arange(len(unique_labels)), unique_labels, fontsize=8)
+
+    # 调整布局
+    plt.tight_layout()
+
+    # 保存为 PNG 文件，确保图像分辨率高且适合论文插图
+    plt.savefig(os.path.join(save_path, 'confusion_matrix.png'), dpi=300, bbox_inches='tight')
+
+def compute_mir_eval(all_frame_labels_gt, all_frame_labels_pred, save_path):
+    # 转成one-hot进行mir_eval metrics计算
+    technique_dict = {'DianG': 0, 'PaoG': 1, 'Pizz': 2, 'Port': 3, 'Tremolo': 4, 'Trill': 5, 'Vibrato': 6, 'NA': 7}
+    labels = [technique_dict[tech] for tech in all_frame_labels_gt if tech in technique_dict]
+    pred = [technique_dict[tech] for tech in all_frame_labels_pred if tech in technique_dict]
+    num_labels = len(technique_dict)
+    # 生成one-hot编码并去掉'NA'
+    one_hot_labels = np.eye(num_labels, dtype=int)[labels]
+    one_hot_pred = np.eye(num_labels, dtype=int)[pred]
+    one_hot_labels = one_hot_labels[:, :-1]
+    one_hot_pred = one_hot_pred[:, :-1]
+
+    # 使用sklearn 计算
+    # Micro 指标
+    micro_precision = precision_score(one_hot_labels, one_hot_pred, average="micro")
+    micro_recall = recall_score(one_hot_labels, one_hot_pred, average="micro")
+    micro_f1 = f1_score(one_hot_labels, one_hot_pred, average="micro")
+
+    # Macro 指标
+    macro_precision = precision_score(one_hot_labels, one_hot_pred, average="macro", zero_division=0)
+    macro_recall = recall_score(one_hot_labels, one_hot_pred, average="macro", zero_division=0)
+    macro_f1 = f1_score(one_hot_labels, one_hot_pred, average="macro", zero_division=0)
+
+    # 准确率
+    # subset_accuracy = accuracy_score(one_hot_labels, one_hot_pred)  # 严格匹配所有标签
+    # flat_accuracy = accuracy_score(one_hot_labels.flatten(), one_hot_pred.flatten())  # 等同于每个标签和时间步独立统计
+
+    tp = np.sum((one_hot_labels.flatten() == 1) & (one_hot_pred.flatten() == 1))
+    fp = np.sum((one_hot_labels.flatten() == 1) & (one_hot_pred.flatten() == 0))
+    fn = np.sum((one_hot_labels.flatten() == 0) & (one_hot_pred.flatten() == 1))
+
+    your_accuracy = tp / (tp + fp + fn)
+    print(f"mir_eval Accuracy: {your_accuracy}")
+    print("-------------use sklearn for mir_eval metrics----------")
+    print(f"Micro: precision[{micro_precision}], recall[{micro_recall}], f1[{micro_f1}]")
+    print(f"Macro: precision[{macro_precision}], recall[{macro_recall}], f1[{macro_f1}]")
+    with open(os.path.join(save_path, "mir_eval_metrics.txt"), mode="w") as file:
+        file.write(f"Micro: precision[{micro_precision}], recall[{micro_recall}], f1[{micro_f1}]")
+        file.write("\n")
+        file.write(f"Macro: precision[{macro_precision}], recall[{macro_recall}], f1[{macro_f1}]")
+    print(f"mir_eval framewise metrics saved to {save_path}")
 
 
 def generate_frame_labels(events, audio_duration, frame_duration=0.04, overlap_threshold=0.5):
@@ -179,15 +290,18 @@ def metrics_from_wandb(project_name=""):
         min_val_loss = float("inf")
         best_epoch_metrics = None
         for row in history:
-            if "val/loss" in row and row["val/loss"] < min_val_loss:
+            if "val/loss" in row and row["val/loss"] is not None and row["val/loss"] < min_val_loss:
                 min_val_loss = row["val/loss"]
                 best_epoch_metrics = row
         # 记录该 run 的最佳 metrics
         if best_epoch_metrics:
-            print(f"Best epoch metrics for {run.name}:")
+            save_metrics = {}
+            #print(f"Best epoch metrics for {run.name}:")
             for key, value in best_epoch_metrics.items():
-                print(f"{key}: {value}")
-            all_best_metrics.append(best_epoch_metrics)
+                if "lr" not in key and "train/strong_loss" not in key:
+                    save_metrics[key] = value
+                    #print(f"{key}: {value}")
+            all_best_metrics.append(save_metrics)
         else:
             print(f"No metrics found for {run.name}.")
 
@@ -198,43 +312,31 @@ def metrics_from_wandb(project_name=""):
             avg_metrics[key] = np.mean([metrics[key] for metrics in all_best_metrics if key in metrics])
         print(
             "==============================Average metrics across all folds (lowest val/loss epoch)=====================")
-        for key, value in avg_metrics.items():
-            print(f"{key}: {value}")
+        for key in sorted(avg_metrics, reverse=True):
+            print(f"{key}: {avg_metrics[key]}")
     else:
         print("No metrics found for any run.")
 
 
 if __name__ == "__main__":
-    metrics_from_wandb(project_name="audiossl_2025-02-23_15-01")
-    exit(0)
+    #metrics_from_wandb(project_name="audiossl_2025-02-24_21-53")
+    #exit(0)
     # ori_test_tsv = "/20A021/ccomhuqin/meta1-1/eval/eval_rm_intersect.tsv"
     # ori_test_dur = "/20A021/ccomhuqin/meta1-1/eval/eval_durations.tsv"
-    gt_test_tsv = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_rm_intersect.tsv"
-    gt_test_dur = "/20A021/finetune_music_dataset/exp/audiossl/1-1/eval_durations.tsv"
-    # rename_gt_atst(ori_test_tsv, ori_test_dur, gt_test_tsv, gt_test_dur) #只跑一遍
+    gt_test_tsv = "/20A021/save_dir/audiossl/1-1/eval_rm_intersect.tsv"
+    gt_test_dur = "/20A021/save_dir/audiossl/1-1/eval_durations.tsv"
+    #rename_gt_atst(ori_test_tsv, ori_test_dur, gt_test_tsv, gt_test_dur) #只跑一遍
 
-    # ----------------- ATST-------------
+    model_dir = "mert_v1"
     for k in range(5):
         print(f'Calculating metrics for fold_{k + 1}.....')
-        atst_metrics_dir = f"/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_{k + 1}/metrics_test/"
-        predictions_dir = os.path.join(atst_metrics_dir, 'predictions')
-        generate_pred_tsv_atst(pred_path=predictions_dir, save_path=atst_metrics_dir)
+        metrics_dir = f"/20A021/save_dir/{model_dir}/1-1/debug_loss=0.5/fold_{k + 1}/metrics_test/"
+        predictions_dir = os.path.join(metrics_dir, 'predictions')
+        generate_pred_tsv_atst(pred_path=predictions_dir, save_path=metrics_dir)
 
-        check_pred_match_gt(pred_csv=atst_metrics_dir + "pred_all.csv", gt_tsv=gt_test_tsv, gt_duration_tsv=gt_test_dur)
-        compute_metrics(threshold=0, pred_csv=atst_metrics_dir + "pred_all.csv",
-                        gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
-                        save_path=atst_metrics_dir)
-        compute_framewise_metrics(pred_csv=atst_metrics_dir + "pred_all.csv",
-                                  gt_tsv=gt_test_tsv, dur_tsv=gt_test_dur, save_path=atst_metrics_dir)
-
-    # ---------------MERT-------------------
-    # mert_metrics_dir = '/20A021/compare_with/mert/1-1/freeze/0116-lr0.01/results/'
-    # predictions_dir = os.path.join(mert_metrics_dir, 'predictions')
-    # generate_pred_tsv_atst(pred_path=predictions_dir, save_path=mert_metrics_dir)
-    #
-    # check_pred_match_gt(pred_csv=mert_metrics_dir + "pred_all.csv", gt_tsv=gt_test_tsv, gt_duration_tsv=gt_test_dur)
-    # # compute_metrics(threshold=0, pred_csv=mert_metrics_dir + "pred_all.csv",
-    # #                 gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
-    # #                 save_path=mert_metrics_dir)
-    # compute_framewise_metrics(pred_csv=mert_metrics_dir + "pred_all.csv",
-    #                           gt_tsv=gt_test_tsv, dur_tsv=gt_test_dur, save_path=mert_metrics_dir)
+        check_pred_match_gt(pred_csv=metrics_dir + "pred_all.csv", gt_tsv=gt_test_tsv, gt_duration_tsv=gt_test_dur)
+        compute_eventwise_metrics(pred_csv=metrics_dir + "pred_all.csv",
+                                  gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
+                                  save_dir=metrics_dir)
+        compute_framewise_metrics(pred_csv=metrics_dir + "pred_all.csv",
+                                  gt_tsv=gt_test_tsv, dur_tsv=gt_test_dur, save_path=metrics_dir)

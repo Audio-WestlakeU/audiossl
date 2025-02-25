@@ -29,8 +29,8 @@ def write_results(filenames, predictions, save_dir):
     merge_preds = torch.cat(predictions, dim=0)  # 在第一个batch的维度拼接起来
     sample_size, C, T = merge_preds.shape
     assert sample_size == len(filenames)
-    logits = merge_preds.transpose(1, 2)  # 变成[sample_size, T, C]，
-    probs = torch.softmax(logits, dim=-1)
+    probs = merge_preds.transpose(1, 2)  # 变成[sample_size, T, C]，
+    #probs = torch.softmax(logits, dim=-1) # 已经在tesp_step进行过了
     file_params = {'file': [], 'start': [], 'end': []}
 
     for filename in filenames:
@@ -84,9 +84,6 @@ def decode_results(save_dir, pred_decoder, median_filter):
         df_cleaned = df[df['event_label'] != 'NA']
         df_cleaned.to_csv(os.path.join(save_pred_dir, filename + '.csv'), index=False)
 
-#
-# def decode_k_fold_results(save_dirs, pred_decoder, median_filter):
-#
 
 
 def collect_and_avg(result_dicts, pred_decoder: ManyHotEncoder):
@@ -150,20 +147,30 @@ def interprete(labels, labels_list):
         texts.append([labels_list[label_idx], start, end])
     return texts
 
+def parseConfig(configFile):
+    import yaml
+    with open(configFile, 'r') as f:
+        config = yaml.safe_load(f)
+    return config
+
 
 if __name__ == "__main__":
-    labels_list = list(get_lab_dict("/20A021/ccomhuqin_seg/meta1-1/common_labels_na.txt").keys())
+    finetune_config = parseConfig(configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_atst.yaml")
+    frame_config = parseConfig(configFile=finetune_config["dcase_conf"])
+
+    labels_list = list(get_lab_dict(frame_config["data"]["label_dict"]).keys())
     NUM_LABELS = len(labels_list)
     pred_decoder = ManyHotEncoder(
         labels_list,
-        audio_len=10,  # self.config["data"]["audio_max_len"],
-        frame_len=1024,  # self.config["feats"]["n_filters"],
-        frame_hop=160,  # self.config["feats"]["hop_length"],
-        net_pooling=4,  # self.config["data"]["net_subsample"],
-        fs=16000,  # self.config["data"]["fs"],
+        audio_len=frame_config["data"]["audio_max_len"],
+        frame_len=frame_config["feats"]["n_filters"],
+        frame_hop=frame_config["feats"]["hop_length"],
+        net_pooling=frame_config["data"]["net_subsample"],
+        fs=frame_config["data"]["fs"],
     )
-    median_filter = MedianPool2d(7, same=True)  # freeze_mode下为了对比不同的模型，不用filter
+    median_filter = MedianPool2d(7, same=True)
+    save_path = finetune_config["save_path"]
     for k in range(5):
         print(f'Decoding fold_{k + 1}...')
-        decode_results(f"/20A021/finetune_music_dataset/exp/audiossl/1-1/debug/fold_{k + 1}/metrics_test/",
+        decode_results(f"{save_path}/fold_{k + 1}/metrics_test/",
                        pred_decoder, median_filter=median_filter)

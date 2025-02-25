@@ -790,8 +790,8 @@ class PSDSEval:
         return tpr_vs_fpr_c, tpr_vs_ctr_c, tpr_vs_efpr_c
 
     @staticmethod
-    def inner_compute_f_score(TP_values, FP_values, FN_values, beta):
-        """Computes the F-scores for the given TP/FP/FN"""
+    def inner_compute_per_class_f_score(TP_values, FP_values, FN_values, beta):
+        """Computes the F-scores for the given TP/FP/FN, per class"""
         epsilon = 1e-7
         k = (1 + beta ** 2)
         f_scores = (k * TP_values) / (k * TP_values + (beta ** 2) * FN_values
@@ -799,15 +799,21 @@ class PSDSEval:
         return f_scores
 
     @staticmethod
+    def inner_compute_micro_f_score(TP_values, FP_values, FN_values, beta=1.0):
+        """Computes the micro f-score for the given TP/FP/FN"""
+        epsilon = 1e-7  # 平滑项，避免除零错误
+        total_TPs, total_FPs, total_FNs = np.sum(TP_values), np.sum(FP_values), np.sum(FN_values)
+        precision = total_TPs / (total_TPs + total_FPs + epsilon)
+        recall = total_TPs / (total_TPs + total_FNs + epsilon)
+        f1 = ((1 + beta ** 2) * precision * recall) / (beta ** 2 * precision + recall + epsilon)
+        return precision, recall, f1
+
+    @staticmethod
     def inner_compute_precision_recall_fscore(TP_values, FP_values, FN_values, beta):
         epsilon = 1e-7  # 平滑项，避免除零错误
         precision = TP_values / (TP_values+FP_values + epsilon)
         recall = TP_values / (TP_values+FN_values + epsilon)
         f_scores = ((1+beta**2) * precision * recall) / (beta**2 * precision + recall + epsilon)
-        # for i, (p,r,f) in enumerate(zip(precision, recall, f_scores)):
-        #     if np.isnan([p,r,f]).any():
-        #         print(f"The precision, recall and f-scores of label index {i} is {p, r, f}. Assign NANs to metrics.")
-        #         precision[i], recall[i], f_scores[i] = np.nan, np.nan, np.nan
         return precision, recall, f_scores
 
     def compute_metrics(self, detections, beta=1.):
@@ -844,8 +850,8 @@ class PSDSEval:
         num_gts = per_class_tp / (tp_ratios+ 1e-7)
         per_class_fp = counts[:-1, -1]
         per_class_fn = num_gts - per_class_tp
-        f_per_class = self.inner_compute_f_score(per_class_tp, per_class_fp,
-                                                 per_class_fn, beta)
+        f_per_class = self.inner_compute_per_class_f_score(per_class_tp, per_class_fp,
+                                                           per_class_fn, beta)
         precision_per_class, recall_per_class, f_scores_per_class = self.inner_compute_precision_recall_fscore(per_class_tp,
                                                                                                                per_class_fp,
                                                                                                                per_class_fn,
@@ -869,6 +875,65 @@ class PSDSEval:
         f_per_class = {c: f for c, f in zip(class_names_no_world, f_per_class)}
 
         return mean_metrics_dict, precision_per_class, recall_per_class, f_per_class
+
+    def compute_metrics_for_ccomhuqin(self, detections, beta=1.):
+        '''
+        从上面那个拷贝而来
+        '''
+        if self.ground_truth is None:
+            raise PSDSEvalError("Ground Truth must be provided before "
+                                "adding the first operating point")
+
+        det_t = self._init_det_table(detections)
+        counts, tp_ratios, _, _ = self._evaluate_detections(det_t)
+        per_class_tp = np.diag(counts)[:-1]
+        num_gts = per_class_tp / (tp_ratios+ 1e-7)
+        per_class_fp = counts[:-1, -1]
+        per_class_fn = num_gts - per_class_tp
+        f_per_class = self.inner_compute_per_class_f_score(per_class_tp, per_class_fp,
+                                                           per_class_fn, beta)
+        micro_p, micro_r, micro_f1 = self.inner_compute_micro_f_score(per_class_tp, per_class_fp,
+                                                           per_class_fn, beta)
+        precision_per_class, recall_per_class, f_scores_per_class = self.inner_compute_precision_recall_fscore(per_class_tp,
+                                                                                                               per_class_fp,
+                                                                                                               per_class_fn,
+                                                                                                               beta)
+        for i, (v1, v2) in enumerate(zip(f_per_class, f_scores_per_class)):
+            if np.isnan(v1) or np.isnan(v2):
+                f_per_class[i], f_scores_per_class[i] = np.nan, np.nan
+            elif abs(v1 - v2) > 1e-4:
+                print(f"error: f_score calculation gets different values at {i}: {v1} and {v2} !!!")
+
+        mean_metrics_dict = {
+            "precision": np.nanmean(precision_per_class),
+            "recall": np.nanmean(recall_per_class),
+            "f_score": np.nanmean(f_scores_per_class),
+        }
+        # remove the injected world label
+        class_names_no_world = sorted(set(self.class_names
+                                          ).difference([WORLD]))
+        precision_per_class = {c: f for c, f in zip(class_names_no_world, precision_per_class)}
+        recall_per_class = {c: f for c, f in zip(class_names_no_world, recall_per_class)}
+        f_per_class = {c: f for c, f in zip(class_names_no_world, f_per_class)}
+
+        structured_metrics = {
+            'micro': {
+                'precision': micro_p,
+                'recall': micro_r,
+                'f1': micro_f1
+            },
+            'macro': {
+                'precision': mean_metrics_dict['precision'],
+                'recall': mean_metrics_dict['recall'],
+                'f1': mean_metrics_dict['f_score'],
+            },
+            'per_class': {
+                'precision_per_class': precision_per_class,
+                'recall_per_class': recall_per_class,
+                'f1_per_class': f_per_class
+            }
+        }
+        return structured_metrics
 
     def compute_macro_f_score(self, detections, beta=1.):
         mean_metrics_dict, precision_per_class, recall_per_class, f_dict = self.compute_metrics(detections, beta)
@@ -945,8 +1010,8 @@ class PSDSEval:
             tp_counts = tpr * n_cls_gt[class_name]
             fn_counts = n_cls_gt[class_name] - tp_counts
             fp_counts = fpr * dataset_dur / self.nseconds
-            f_scores = self.inner_compute_f_score(tp_counts, fp_counts,
-                                                  fn_counts, beta=beta)
+            f_scores = self.inner_compute_per_class_f_score(tp_counts, fp_counts,
+                                                            fn_counts, beta=beta)
 
             op_index = None
             if constraint == "tpr":

@@ -19,10 +19,7 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
     SEDMetrics,
     gpu_decode_preds, PSDSIntersectionMetrics
 )
-from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import (
-    compute_per_intersection_macro_f1,
-    compute_psds_from_operating_points
-)
+
 from sklearn.metrics import f1_score, accuracy_score, classification_report
 
 '''
@@ -185,14 +182,11 @@ class FineTuningPLModule(LightningModule):
             print(f"Use focal loss of gamma={focal_gamma}")
             self.loss_fn = FocalLoss(loss_fn=loss_fn, gamma=focal_gamma)
         print("Using CrossEntropyLoss with weights: ", loss_weights)
-        self.test_results = {'filenames': [], 'predictions': []}  # 存储所有predictions
-
-        # buffer for event based scores which we compute using sed-eval
+        self.test_file_results = {'filenames': [], 'predictions': []}  # 存储所有file predictions，为了之后整合在一起计算
         self.median_filter = MedianPool2d(7, same=True)
         self.sed_metrics_student = SEDMetrics(intersection_thd=0.5)
         self.psds_metrics = PSDSIntersectionMetrics()
         self.validation_outputs = []
-
         self.lr_scale = lr_scale
 
     def training_step(self, batch, batch_idx):
@@ -234,10 +228,8 @@ class FineTuningPLModule(LightningModule):
         labels = torch.cat([x['labels'] for x in self.validation_outputs], dim=0)  # 形状: [sample_size, cls, T]
         strong_pred, labels = strong_pred.transpose(1, 2), labels.transpose(1, 2)  # [sample_size, T, cls][64, 250, 9]
 
-        # 对 strong_pred 进行 Softmax 归一化
-        probs = F.softmax(strong_pred, dim=-1)
         # 进行 argmax，获取预测类别
-        preds = torch.argmax(probs, dim=-1)  # shape: [sample_size, T]
+        preds = torch.argmax(strong_pred, dim=-1)  # shape: [sample_size, T]
         labels = torch.argmax(labels, dim=-1)  # shape: [sample_size, T]
         # 展开 preds 和 labels
         preds_flat = preds.view(-1)  # shape: [sample_size * T]
@@ -281,6 +273,7 @@ class FineTuningPLModule(LightningModule):
         # loss
         loss_strong_student = self._calculate_loss(strong_pred, labels)
         self.val_loss.append(loss_strong_student.item())
+        strong_pred = F.softmax(strong_pred, dim=1)  # 统一在这里进行softmax
 
         # 原代码计算sed_metrics
         decoded_strong = onehot_decode_preds(strong_pred, [0], self.median_filter)  # [bsz, cls, T]
@@ -322,10 +315,11 @@ class FineTuningPLModule(LightningModule):
         test_loss = self._calculate_loss(strong_pred, labels)
         self.log("test/real/strong_loss", test_loss, prog_bar=True, logger=True)
 
-        # Compute PSDS (Different from F1 metric, PSDS computes the ROC, which requires various thresholds from 0 to 1.)
-        # 在每一步test_step不能直接decode，原因是要对截成10s的片段进行合并结果，这一步只能先保存，最后test_epoch_end再合并+decode
-        self.test_results['filenames'].extend(filenames)
-        self.test_results['predictions'].append(strong_pred)
+        # 为了计算完整乐段的结果，在每一步test_step不decode，这一步先保存，最后test_epoch_end再合并
+        strong_pred = F.softmax(strong_pred, dim=1)  # 统一在这里进行softmax
+        self.test_file_results['filenames'].extend(filenames)
+        self.test_file_results['predictions'].append(strong_pred)
+
 
     def on_test_epoch_end(self) -> None:
         # 只保存预测结果csv，评价指标的计算统一到utils_ccom_eval/evaluation.py，与其他方法一起做对比
@@ -337,8 +331,8 @@ class FineTuningPLModule(LightningModule):
         psds.g_parallel = True
 
         # save self.decoded_buffer as tsv file, remove NA
-        write_results(filenames=self.test_results['filenames'], predictions=self.test_results['predictions'],
-                          save_dir=save_dir)
+        write_results(filenames=self.test_file_results['filenames'], predictions=self.test_file_results['predictions'],
+                      save_dir=save_dir)
 
 
         # print("Intersection F1:", intersection_f1_macro)

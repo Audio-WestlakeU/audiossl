@@ -1,21 +1,11 @@
 import os
-import threading
-import multiprocessing
-import sed_eval
-import psds_eval
 
 import numpy as np
 import pandas as pd
-from .psds import PSDSEval, plot_psd_roc
-
-from concurrent.futures import ProcessPoolExecutor
-from queue import Queue
-
-
-g_manager = multiprocessing.Manager()
-
-
-g_parallel = False
+import psds_eval
+import sed_eval
+from psds_eval import PSDSEval, plot_psd_roc
+import sed_scores_eval
 
 def get_event_list_current_file(df, fname):
     """
@@ -36,6 +26,7 @@ def get_event_list_current_file(df, fname):
         event_list_for_current_file = event_file.to_dict("records")
 
     return event_list_for_current_file
+
 
 def psds_results(psds_obj):
     """ Compute psds scores
@@ -84,7 +75,7 @@ def event_based_evaluation_df(
         percentage_of_length=percentage_of_length,
         empty_system_output_handling="zero_score",
     )
-    
+
     for fname in evaluated_files:
         reference_event_list_for_current_file = get_event_list_current_file(
             reference, fname
@@ -92,11 +83,11 @@ def event_based_evaluation_df(
         estimated_event_list_for_current_file = get_event_list_current_file(
             estimated, fname
         )
+
         event_based_metric.evaluate(
             reference_event_list=reference_event_list_for_current_file,
             estimated_event_list=estimated_event_list_for_current_file,
         )
-
 
     return event_based_metric
 
@@ -165,7 +156,6 @@ def compute_per_intersection_macro_f1(
     dtc_threshold=0.5,
     gtc_threshold=0.5,
     cttc_threshold=0.3,
-    label_interest=None,
 ):
     """ Compute F1-score per intersection, using the defautl
     Args:
@@ -183,11 +173,7 @@ def compute_per_intersection_macro_f1(
     """
     gt = pd.read_csv(ground_truth_file, sep="\t")
     durations = pd.read_csv(durations_file, sep="\t")
-    if label_interest is not None:
-        gt_mask = [x in label_interest for x in gt["event_label"]]
-        gt = gt[gt_mask]
-        filenames = gt["filename"].values
-        durations = durations[[x in filenames for x in durations["filename"]]]
+
     psds = PSDSEval(
         ground_truth=gt,
         metadata=durations,
@@ -196,116 +182,18 @@ def compute_per_intersection_macro_f1(
         cttc_threshold=cttc_threshold,
     )
     psds_macro_f1 = []
+    f_per_class = []
     for threshold in prediction_dfs.keys():
         if not prediction_dfs[threshold].empty:
-            threshold_f1, f_dict = psds.compute_macro_f_score(prediction_dfs[threshold])
+            threshold_f1, f_per_class = psds.compute_macro_f_score(prediction_dfs[threshold])
         else:
             threshold_f1 = 0
         if np.isnan(threshold_f1):
             threshold_f1 = 0.0
         psds_macro_f1.append(threshold_f1)
     psds_macro_f1 = np.mean(psds_macro_f1)
-    return psds_macro_f1
+    return psds_macro_f1, f_per_class
 
-def compute_per_intersection_metrics(
-    prediction_dfs,
-    ground_truth_file,
-    durations_file,
-    dtc_threshold=0.5,
-    gtc_threshold=0.5,
-    cttc_threshold=0.3,
-    label_interest=None,
-):
-    """ Compute F1-score per intersection, using the defautl
-        Args:
-            prediction_dfs: dict, a dictionary with thresholds keys and predictions dataframe
-            ground_truth_file: pd.DataFrame, the groundtruth dataframe
-            durations_file: pd.DataFrame, the duration dataframe
-            dtc_threshold: float, the parameter used in PSDSEval, percentage of tolerance for groundtruth intersection
-                with predictions
-            gtc_threshold: float, the parameter used in PSDSEval percentage of tolerance for predictions intersection
-                with groundtruth
-            gtc_threshold: float, the parameter used in PSDSEval to know the percentage needed to count FP as cross-trigger
-
-        Returns:
-
-        """
-    gt = pd.read_csv(ground_truth_file, sep="\t")
-    durations = pd.read_csv(durations_file, sep="\t")
-    if label_interest is not None:
-        gt_mask = [x in label_interest for x in gt["event_label"]]
-        gt = gt[gt_mask]
-        filenames = gt["filename"].values
-        durations = durations[[x in filenames for x in durations["filename"]]]
-    psds = PSDSEval(
-        ground_truth=gt,
-        metadata=durations,
-        dtc_threshold=dtc_threshold,
-        gtc_threshold=gtc_threshold,
-        cttc_threshold=cttc_threshold,
-    )
-    psds_macro_metrics = {
-        "precision": [],
-        "recall": [],
-        "f_score": []
-    }
-    p_per_class_th, r_per_class_th, f_per_class_th = {}, {}, {}
-    for threshold in prediction_dfs.keys():
-        if not prediction_dfs[threshold].empty:
-            mean_metrics_dict, precision_per_class, recall_per_class, f_per_class = psds.compute_metrics(prediction_dfs[threshold])
-            p_per_class_th[threshold], r_per_class_th[threshold], f_per_class_th[threshold] = precision_per_class, recall_per_class, f_per_class
-            threshold_precision, threshold_recall, threshold_f1 = mean_metrics_dict["precision"], mean_metrics_dict["recall"], mean_metrics_dict["f_score"]
-        else:
-            threshold_precision, threshold_recall, threshold_f1 = 0,0,0
-        psds_macro_metrics["precision"].append(threshold_precision)
-        psds_macro_metrics["recall"].append(threshold_recall)
-        psds_macro_metrics["f_score"].append(threshold_f1)
-    psds_metrics_mean = {
-        "precision": np.nanmean(psds_macro_metrics["precision"]),
-        "recall": np.nanmean(psds_macro_metrics["recall"]),
-        "f_score": np.nanmean(psds_macro_metrics["f_score"])
-    }
-
-    return psds_metrics_mean, p_per_class_th, r_per_class_th, f_per_class_th
-
-def compute_per_intersection_metrics_ccomhuqin(
-    prediction_df,
-    ground_truth_file,
-    durations_file,
-    dtc_threshold=0.5,
-    gtc_threshold=0.5,
-    cttc_threshold=0.3,
-    label_interest=None,
-):
-    """
-    为了ccomhuqin计算micro和macro，去掉了threshold
-    """
-    gt = pd.read_csv(ground_truth_file, sep="\t")
-    durations = pd.read_csv(durations_file, sep="\t")
-    if label_interest is not None:
-        gt_mask = [x in label_interest for x in gt["event_label"]]
-        gt = gt[gt_mask]
-        filenames = gt["filename"].values
-        durations = durations[[x in filenames for x in durations["filename"]]]
-    psds = PSDSEval(
-        ground_truth=gt,
-        metadata=durations,
-        dtc_threshold=dtc_threshold,
-        gtc_threshold=gtc_threshold,
-        cttc_threshold=cttc_threshold,
-    )
-    structured_metrics = psds.compute_metrics_for_ccomhuqin(prediction_df)
-    return structured_metrics
-
-def compute_psds_one_item(psds_eval: PSDSEval,prediction_dfs,i,k):
-    det = prediction_dfs[k]
-    # see issue https://github.com/audioanalytic/psds_eval/issues/3
-    det["index"] = range(1, len(det) + 1)
-    det = det.set_index("index")
-    psds_args = psds_eval.add_operating_point_single_thread(
-        det, info={"name": f"Op {i + 1:02d}", "threshold": k}
-    )
-    return psds_args
 
 def compute_psds_from_operating_points(
     prediction_dfs,
@@ -318,19 +206,10 @@ def compute_psds_from_operating_points(
     alpha_st=0,
     max_efpr=100,
     save_dir=None,
-    label_interest=None,
-    weighted=False # Unused argument, to delete
 ):
-    print("Computing PSDS score ... (May take > 10 mins)")
+
     gt = pd.read_csv(ground_truth_file, sep="\t")
     durations = pd.read_csv(durations_file, sep="\t")
-
-    if label_interest is not None:
-        gt_mask = [x in label_interest for x in gt["event_label"]]
-        gt = gt[gt_mask]
-        filenames = gt["filename"].values
-        durations = durations[[x in filenames for x in durations["filename"]]]
-    
     psds_eval = PSDSEval(
         ground_truth=gt,
         metadata=durations,
@@ -338,41 +217,17 @@ def compute_psds_from_operating_points(
         gtc_threshold=gtc_threshold,
         cttc_threshold=cttc_threshold,
     )
-    if g_parallel:
-        # Parallel version (written by us)
-        prediction_dfs=g_manager.dict(prediction_dfs)
-        q = Queue(100)
-        def helper_thread_fun():
-            with ProcessPoolExecutor(max_workers=10) as exe:
-                for i, k in enumerate(prediction_dfs.keys()):
-                    q.put(exe.submit(compute_psds_one_item,psds_eval,prediction_dfs,i,k))
-                q.put(None)
 
-        helper_thread = threading.Thread(target=helper_thread_fun)
-        helper_thread.setDaemon(True)
-        helper_thread.start()
+    for i, k in enumerate(prediction_dfs.keys()):
+        det = prediction_dfs[k]
+        # see issue https://github.com/audioanalytic/psds_eval/issues/3
+        det["index"] = range(1, len(det) + 1)
+        det = det.set_index("index")
+        psds_eval.add_operating_point(
+            det, info={"name": f"Op {i + 1:02d}", "threshold": k}
+        )
 
-        for future in iter(q.get,""):
-            if future is None:
-                break
-            else:
-                psds_args=future.result()
-                if psds_args is not None:
-                    psds_eval._add_op(**psds_args)
-    else:
-        # Default behavior
-        for i, k in enumerate(prediction_dfs.keys()):
-            det = prediction_dfs[k]
-            # see issue https://github.com/audioanalytic/psds_eval/issues/3
-            det["index"] = range(1, len(det) + 1)
-            det = det.set_index("index")
-            psds_args = psds_eval.add_operating_point_single_thread(
-                det, info={"name": f"Op {i + 1:02d}", "threshold": k}
-            )
-            if psds_args is not None:
-                psds_eval._add_op(**psds_args)
     psds_score = psds_eval.psds(alpha_ct=alpha_ct, alpha_st=alpha_st, max_efpr=max_efpr)
-
 
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
@@ -389,8 +244,51 @@ def compute_psds_from_operating_points(
                 index=False,
             )
 
+        filename = (
+            f"PSDS_dtc{dtc_threshold}_gtc{gtc_threshold}_cttc{cttc_threshold}"
+            f"_ct{alpha_ct}_st{alpha_st}_max{max_efpr}_psds_eval.png"
+        )
         plot_psd_roc(
             psds_score,
-            filename=os.path.join(save_dir, f"PSDS_ct{alpha_ct}_st{alpha_st}_100.png"),
+            filename=os.path.join(save_dir, filename),
         )
+
     return psds_score.value
+
+
+def compute_psds_from_scores(
+    scores,
+    ground_truth_file,
+    durations_file,
+    dtc_threshold=0.5,
+    gtc_threshold=0.5,
+    cttc_threshold=0.3,
+    alpha_ct=0,
+    alpha_st=0,
+    max_efpr=100,
+    num_jobs=4,
+    save_dir=None,
+):
+    psds, psd_roc, single_class_rocs, *_ = sed_scores_eval.intersection_based.psds(
+        scores=scores, ground_truth=ground_truth_file,
+        audio_durations=durations_file,
+        dtc_threshold=dtc_threshold, gtc_threshold=gtc_threshold,
+        cttc_threshold=cttc_threshold, alpha_ct=alpha_ct, alpha_st=alpha_st,
+        max_efpr=max_efpr, num_jobs=num_jobs,
+    )
+    if save_dir is not None:
+        scores_dir = os.path.join(save_dir, "scores")
+        sed_scores_eval.io.write_sed_scores(scores, scores_dir)
+        filename = (
+            f"PSDS_dtc{dtc_threshold}_gtc{gtc_threshold}_cttc{cttc_threshold}"
+            f"_ct{alpha_ct}_st{alpha_st}_max{max_efpr}_sed_scores_eval.png"
+        )
+        sed_scores_eval.utils.visualization.plot_psd_roc(
+            psd_roc,
+            filename=os.path.join(save_dir, filename),
+            dtc_threshold=dtc_threshold, gtc_threshold=gtc_threshold,
+            cttc_threshold=cttc_threshold, alpha_ct=alpha_ct,
+            alpha_st=alpha_st, unit_of_time='hour',  max_efpr=max_efpr,
+            psds=psds,
+        )
+    return psds

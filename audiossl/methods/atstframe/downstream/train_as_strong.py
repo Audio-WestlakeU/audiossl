@@ -227,7 +227,7 @@ def run_k_fold(dict_args, pretrained_ckpt_path):
                                                     use_last=dict_args["use_last"],
                                                     drop_rate=0.0, attn_drop_rate=0.0)
         elif arch == "mert":
-            pretrained_module = MertPredModule()
+            pretrained_module = MertPredModule(pretrained_ckpt_path)
         else:
             raise NotImplementedError(f"{arch} not supported!")
         print("Freezing/Unfreezing encoder parameters?...", end="")
@@ -249,13 +249,13 @@ def predict_k_fold(dict_args, pretrained_ckpt_path):
     assert (len(test_checkpoints) == dict_args['k_fold'])
     arch = dict_args['arch']
     for k in range(dict_args['k_fold']):
-        if arch == 'atst_frame':
+        if arch == "frameatst":
             pretrained_module = FrameATSTPredModule(pretrained_ckpt_path,
                                                     finetune_layer=dict_args["finetune_layer"],
                                                     use_last=dict_args["use_last"],
                                                     drop_rate=0.0, attn_drop_rate=0.0)
         elif arch == 'mert':
-            pretrained_module = MertPredModule()
+            pretrained_module = MertPredModule(pretrained_ckpt_path)
         else:
             raise NotImplementedError(f"{arch} not supported!")
         pretrained_module.eval()  # 这里是新加的，原来是统一和train相同，但是在test模式下，只需要eval就可以，验证一下是否正确
