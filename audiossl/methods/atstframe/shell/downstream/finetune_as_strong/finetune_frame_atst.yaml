@@ -1,25 +1,24 @@
-save_path: "/20A021/save_dir/mert_v1/1-1/debug_loss=0.5"
+save_path: "/20A021/ccomhuqin_seg/16k/results/default-freeze"
 nproc: 1
 devices: 0,1,2,3
-arch: "mert"  # ["frameatst", "mert"] 注意这个跟下面的一起改！！！
-pretrained_ckpt_path: "/20A021/compare_with/mert/pretrained_model/MERT-v1-95M"  # MERT-v0
-#pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
-dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/utils_as_strong/conf/frame_75hz.yaml"
-learning_rate: 0.01 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
+arch: "frameatst"
+pretrained_ckpt_path: "/20A021/dataset_from_dyl/save_path/pretrainBase-0916/last.ckpt"
+dcase_conf: "/20A021/projects/audiossl/audiossl/methods/atstframe/downstream/utils_as_strong/conf/frame_40.yaml"
+learning_rate: 0.005 # Considering the large data size of strongly-labeled AudioSet, we only search over 3 different learning rates for each model, i.e. 0.05, 0.1 and 0.5.
 lr_scale: 0.75
-batch_size_per_gpu: 16
-max_epochs: 100
+batch_size_per_gpu: 64
+max_epochs: 200
 dataset_name: "ccomhuqin_as_strong" # 在datasets/init.py register新的dataset，因为num_label需要修改
 num_workers: 4
-loss_weight_param: 0.5  # 0代表没有
-focal_gamma: 2  # 0代表没有
+loss_weight_param: 0  # 0代表没有
+focal_gamma: 0  # 0代表没有
 classifier: 'linear' # default is 'linear' ['linear', 'mlp', 'rnn']
 k_fold: 5
-freeze_mode: False  # default is False, 注意只有当这里是False的时候，下面'finetune_layer'参数才有用
+freeze_mode: True  # default is False, 注意只有当这里是False的时候，下面'finetune_layer'参数才有用
 finetune_layer: 'all' # default is 'all'
 use_last: True # default is True, 仅使用最后一层的输出。如果是False，就使用weighted sum of all layers
-test_from_checkpoints: ["/20A021/save_dir/mert_v1/1-1/debug_loss=0.5/fold_1/checkpoint-epoch=099.ckpt",
-                       "/20A021/save_dir/mert_v1/1-1/debug_loss=0.5/fold_2/checkpoint-epoch=099.ckpt",
-                       "/20A021/save_dir/mert_v1/1-1/debug_loss=0.5/fold_3/checkpoint-epoch=099.ckpt",
-                       "/20A021/save_dir/mert_v1/1-1/debug_loss=0.5/fold_4/checkpoint-epoch=099.ckpt",
-                       "/20A021/save_dir/mert_v1/1-1/debug_loss=0.5/fold_5/checkpoint-epoch=099.ckpt"]
+test_from_checkpoints: ["/20A021/ccomhuqin_seg/16k/results/default-freeze/fold_1/checkpoint-epoch=199.ckpt",
+                       "/20A021/ccomhuqin_seg/16k/results/default-freeze/fold_2/checkpoint-epoch=199.ckpt",
+                       "/20A021/ccomhuqin_seg/16k/results/default-freeze/fold_3/checkpoint-epoch=199.ckpt",
+                       "/20A021/ccomhuqin_seg/16k/results/default-freeze/fold_4/checkpoint-epoch=199.ckpt",
+                       "/20A021/ccomhuqin_seg/16k/results/default-freeze/fold_5/checkpoint-epoch=199.ckpt"]

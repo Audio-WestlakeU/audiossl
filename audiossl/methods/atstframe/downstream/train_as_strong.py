@@ -194,7 +194,7 @@ def main():
 
     # 用my_train_small.yaml override train_small.sh中的参数
     dict_args.update(parseConfig(
-        configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_atst.yaml"))
+        configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_mert.yaml"))
     print("Target task:", dict_args["dataset_name"])
     pretrained_ckpt_path = dict_args["pretrained_ckpt_path"]
 

@@ -1,5 +1,6 @@
 import yaml
 
+from audiossl.methods.atstframe.downstream.utils_ccom_eval.metrics_utils import compute_mir_metrics
 from audiossl.methods.atstframe.downstream.utils_psds_eval.evaluation import compute_per_intersection_metrics, \
     compute_per_intersection_metrics_ccomhuqin
 from audiossl.methods.atstframe.downstream.utils_ccom_eval.evaluation_measures import compute_sed_eval_metrics
@@ -122,7 +123,7 @@ def check_pred_match_gt(pred_csv, gt_tsv, gt_duration_tsv):
     assert gt_filenames == gt_duration_filenames
 
 
-def compute_framewise_metrics(pred_csv, gt_tsv, dur_tsv, save_path):
+def compute_framewise_metrics(pred_csv, gt_tsv, dur_tsv):
     predictions = pd.read_csv(pred_csv)
     ground_truth = pd.read_csv(gt_tsv, sep="\t")
     gt_duration = pd.read_csv(dur_tsv, sep="\t")
@@ -152,29 +153,30 @@ def compute_framewise_metrics(pred_csv, gt_tsv, dur_tsv, save_path):
     all_frame_labels_pred = np.array(all_frame_labels_pred)
 
     # 画混淆矩阵
-    plot_confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, save_path)
+    # plot_confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, save_path)
 
     # 计算mir_eval framewise metrics
-    compute_mir_eval(all_frame_labels_gt, all_frame_labels_pred, save_path=save_path)
+    mir_p, mir_r, mir_f1, mir_acc = _compute_framewise(all_frame_labels_gt, all_frame_labels_pred)
 
     # 使用 classification_report 打印每个类别的详细指标
-    unique_labels = np.unique(np.concatenate([all_frame_labels_gt, all_frame_labels_pred]))
-    report = classification_report(all_frame_labels_gt, all_frame_labels_pred, labels=unique_labels)
-
-    # 计算全局 Accuracy
-    global_accuracy = accuracy_score(all_frame_labels_gt, all_frame_labels_pred)
-    # 计算全局 F1（需要将标签转换为数值）
-    label_to_index = {label: i for i, label in enumerate(unique_labels)}
-    all_frame_labels_gt_numeric = np.array([label_to_index[label] for label in all_frame_labels_gt])
-    all_frame_labels_pred_numeric = np.array([label_to_index[label] for label in all_frame_labels_pred])
-    global_f1 = f1_score(all_frame_labels_gt_numeric, all_frame_labels_pred_numeric, average="macro")
+    # unique_labels = np.unique(np.concatenate([all_frame_labels_gt, all_frame_labels_pred]))
+    # report = classification_report(all_frame_labels_gt, all_frame_labels_pred, labels=unique_labels)
+    #
+    # # 计算全局 Accuracy
+    # global_accuracy = accuracy_score(all_frame_labels_gt, all_frame_labels_pred)
+    # # 计算全局 F1（需要将标签转换为数值）
+    # label_to_index = {label: i for i, label in enumerate(unique_labels)}
+    # all_frame_labels_gt_numeric = np.array([label_to_index[label] for label in all_frame_labels_gt])
+    # all_frame_labels_pred_numeric = np.array([label_to_index[label] for label in all_frame_labels_pred])
+    # global_f1 = f1_score(all_frame_labels_gt_numeric, all_frame_labels_pred_numeric, average="macro")
     #print(f"Mean accuracy: {global_accuracy}. Macro F1: {global_f1}")
     # 保存到文件
-    with open(os.path.join(save_path, "framewise_metrics.txt"), mode="w") as file:
-        file.write(report)
-        file.write("\n")
-        file.write(f"Mean accuracy: {global_accuracy}. Macro F1: {global_f1}")
-    print(f"Classification report and macro F1 saved to {save_path}")
+    # with open(os.path.join(save_path, "framewise_metrics.txt"), mode="w") as file:
+    #     file.write(report)
+    #     file.write("\n")
+    #     file.write(f"Mean accuracy: {global_accuracy}. Macro F1: {global_f1}")
+    # print(f"Classification report and macro F1 saved to {save_path}")
+    return mir_p, mir_r, mir_f1, mir_acc
 
 
 def plot_confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, save_path):
@@ -209,7 +211,7 @@ def plot_confusion_matrix(all_frame_labels_gt, all_frame_labels_pred, save_path)
     # 保存为 PNG 文件，确保图像分辨率高且适合论文插图
     plt.savefig(os.path.join(save_path, 'confusion_matrix.png'), dpi=300, bbox_inches='tight')
 
-def compute_mir_eval(all_frame_labels_gt, all_frame_labels_pred, save_path):
+def _compute_framewise(all_frame_labels_gt, all_frame_labels_pred):
     # 转成one-hot进行mir_eval metrics计算
     technique_dict = {'DianG': 0, 'PaoG': 1, 'Pizz': 2, 'Port': 3, 'Tremolo': 4, 'Trill': 5, 'Vibrato': 6, 'NA': 7}
     labels = [technique_dict[tech] for tech in all_frame_labels_gt if tech in technique_dict]
@@ -226,15 +228,10 @@ def compute_mir_eval(all_frame_labels_gt, all_frame_labels_pred, save_path):
     micro_precision = precision_score(one_hot_labels, one_hot_pred, average="micro")
     micro_recall = recall_score(one_hot_labels, one_hot_pred, average="micro")
     micro_f1 = f1_score(one_hot_labels, one_hot_pred, average="micro")
-
     # Macro 指标
     macro_precision = precision_score(one_hot_labels, one_hot_pred, average="macro", zero_division=0)
     macro_recall = recall_score(one_hot_labels, one_hot_pred, average="macro", zero_division=0)
     macro_f1 = f1_score(one_hot_labels, one_hot_pred, average="macro", zero_division=0)
-
-    # 准确率
-    # subset_accuracy = accuracy_score(one_hot_labels, one_hot_pred)  # 严格匹配所有标签
-    # flat_accuracy = accuracy_score(one_hot_labels.flatten(), one_hot_pred.flatten())  # 等同于每个标签和时间步独立统计
 
     tp = np.sum((one_hot_labels.flatten() == 1) & (one_hot_pred.flatten() == 1))
     fp = np.sum((one_hot_labels.flatten() == 1) & (one_hot_pred.flatten() == 0))
@@ -245,11 +242,19 @@ def compute_mir_eval(all_frame_labels_gt, all_frame_labels_pred, save_path):
     print("-------------use sklearn for mir_eval metrics----------")
     print(f"Micro: precision[{micro_precision}], recall[{micro_recall}], f1[{micro_f1}]")
     print(f"Macro: precision[{macro_precision}], recall[{macro_recall}], f1[{macro_f1}]")
-    with open(os.path.join(save_path, "mir_eval_metrics.txt"), mode="w") as file:
-        file.write(f"Micro: precision[{micro_precision}], recall[{micro_recall}], f1[{micro_f1}]")
-        file.write("\n")
-        file.write(f"Macro: precision[{macro_precision}], recall[{macro_recall}], f1[{macro_f1}]")
-    print(f"mir_eval framewise metrics saved to {save_path}")
+
+    metrics = compute_mir_metrics(one_hot_pred.T, one_hot_labels.T, feature_rate=feature_rate)
+    mir_p = metrics['metric/IPT_frame/precision']
+    mir_r = metrics['metric/IPT_frame/recall']
+    mir_f1 = metrics['metric/IPT_frame/f1']
+    mir_acc = metrics['metric/IPT_frame/accuracy']
+    EPSILON = 1e-6
+    assert abs(micro_precision - mir_p) < EPSILON
+    assert abs(micro_recall - mir_r) < EPSILON
+    assert abs(micro_f1 - mir_f1) < EPSILON
+    assert abs(mir_acc - your_accuracy) < EPSILON
+
+    return mir_p, mir_r, mir_f1, mir_acc
 
 
 def generate_frame_labels(events, audio_duration, frame_duration=0.04, overlap_threshold=0.5):
@@ -327,16 +332,30 @@ if __name__ == "__main__":
     gt_test_dur = "/20A021/save_dir/audiossl/1-1/eval_durations.tsv"
     #rename_gt_atst(ori_test_tsv, ori_test_dur, gt_test_tsv, gt_test_dur) #只跑一遍
 
-    model_dir = "mert_v1"
+    save_path = "/20A021/ccomhuqin_seg/24k/results/default-freeze"
+    feature_rate = 75
+    save_framewise_txt = os.path.join(save_path, "results.txt")
+    precisions, recalls, f1s, accs = [], [], [], []
     for k in range(5):
         print(f'Calculating metrics for fold_{k + 1}.....')
-        metrics_dir = f"/20A021/save_dir/{model_dir}/1-1/debug_loss=0.5/fold_{k + 1}/metrics_test/"
+        metrics_dir = f"{save_path}/fold_{k + 1}/metrics_test/"
         predictions_dir = os.path.join(metrics_dir, 'predictions')
         generate_pred_tsv_atst(pred_path=predictions_dir, save_path=metrics_dir)
 
         check_pred_match_gt(pred_csv=metrics_dir + "pred_all.csv", gt_tsv=gt_test_tsv, gt_duration_tsv=gt_test_dur)
-        compute_eventwise_metrics(pred_csv=metrics_dir + "pred_all.csv",
-                                  gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
-                                  save_dir=metrics_dir)
-        compute_framewise_metrics(pred_csv=metrics_dir + "pred_all.csv",
-                                  gt_tsv=gt_test_tsv, dur_tsv=gt_test_dur, save_path=metrics_dir)
+        # compute_eventwise_metrics(pred_csv=metrics_dir + "pred_all.csv",
+        #                           gt_tsv=gt_test_tsv, gt_dur=gt_test_dur,
+        #                           save_dir=metrics_dir)
+        p, r, f1, acc = compute_framewise_metrics(pred_csv=metrics_dir + "pred_all.csv",
+                                  gt_tsv=gt_test_tsv, dur_tsv=gt_test_dur)
+        with open(save_framewise_txt, mode="a") as file:
+            file.write("\n")
+            file.write(f"Precision: {p}. Recall: {r}. F1: {f1}. Accuracy: {acc}")
+        precisions.append(p)
+        recalls.append(r)
+        f1s.append(f1)
+        accs.append(acc)
+    with open(save_framewise_txt, mode="a") as file:
+        file.write("\n-------Average---------\n")
+        file.write(f"Precision: {np.mean(precisions)}. Recall: {np.mean(recalls)}. F1: {np.mean(f1s)}. Accuracy: {np.mean(accs)}")
+

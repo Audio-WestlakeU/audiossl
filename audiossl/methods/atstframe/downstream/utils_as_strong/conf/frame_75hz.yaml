@@ -11,7 +11,7 @@ data: # change with your paths if different.
                          "/20A021/ccomhuqin_seg/24k/meta1-1/val/val_fold_3_common.tsv",
                          "/20A021/ccomhuqin_seg/24k/meta1-1/val/val_fold_4_common.tsv",
                          "/20A021/ccomhuqin_seg/24k/meta1-1/val/val_fold_5_common.tsv"]
-  test_folder: "/20A021/ccomhuqin_seg/24k/data/eval/" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
+  test_folder: "" # 当tsv的filename是绝对路径，用os.path.join会忽略这个folder，直接返回filename
   test_folder_44k: ""
   test_tsv: "/20A021/ccomhuqin_seg/24k/meta1-1/eval/eval_common.tsv"
   test_dur: "/20A021/ccomhuqin_seg/24k/meta1-1/eval/eval_duration.tsv"

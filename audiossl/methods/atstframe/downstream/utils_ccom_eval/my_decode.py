@@ -1,5 +1,6 @@
 import os.path
 import pickle
+import shutil
 
 import librosa
 import torch
@@ -13,10 +14,10 @@ from audiossl.methods.atstframe.downstream.utils_psds_eval.gpu_decode import (
 )
 
 ########### TODO: 将下面参数改成从frame_40.yaml中读取
-SR = 16000
-WINDOW_SIZE = 10
-STRIDE = 5
-HOP_LEN = 160
+# SR = 16000
+# WINDOW_SIZE = 10
+# STRIDE = 5
+# HOP_LEN = 160
 
 
 def write_results(filenames, predictions, save_dir):
@@ -69,7 +70,8 @@ def decode_results(save_dir, pred_decoder, median_filter):
         results = pickle.load(handle)
 
     save_pred_dir = os.path.join(save_dir, 'predictions')
-    os.makedirs(save_pred_dir, exist_ok=True)
+    #shutil.rmtree(save_pred_dir)
+    os.makedirs(save_pred_dir, exist_ok=False)
     for filename in results:
         probs = collect_and_avg(results[filename], pred_decoder)
         dummy_threshold = 0  # 使用源代码的逻辑，这里的key是threshold，传入的是[0]
@@ -117,36 +119,6 @@ def collect_and_avg(result_dicts, pred_decoder: ManyHotEncoder):
     return result
 
 
-def plain_decode(probs):
-    '''
-    probs -> label
-    without any post-processing decoding technique
-    also: auto aggregate
-    '''
-    label = probs.argmax(-1).numpy()
-    results = [[label[0], 0, 1]]
-    for i, l in enumerate(label[1:], 1):
-        prevl, prev_start, prev_end = results[-1]
-        if prevl == l and prev_end == i:
-            # same label, next to each other
-            results[-1][-1] = i + 1
-        else:
-            # new event
-            results.append([l, i, i + 1])
-    return results
-
-
-def interprete(labels, labels_list):
-    '''
-    label -> text
-    $labelname,$start,$end
-    '''
-    texts = list()
-    for (label_idx, start, end) in labels:
-        start, end = map(lambda x: librosa.frames_to_time(x, sr=SR, hop_length=320), [start, end])
-        texts.append([labels_list[label_idx], start, end])
-    return texts
-
 def parseConfig(configFile):
     import yaml
     with open(configFile, 'r') as f:
@@ -155,7 +127,7 @@ def parseConfig(configFile):
 
 
 if __name__ == "__main__":
-    finetune_config = parseConfig(configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_atst.yaml")
+    finetune_config = parseConfig(configFile="/20A021/projects/audiossl/audiossl/methods/atstframe/shell/downstream/finetune_as_strong/finetune_frame_mert.yaml")
     frame_config = parseConfig(configFile=finetune_config["dcase_conf"])
 
     labels_list = list(get_lab_dict(frame_config["data"]["label_dict"]).keys())
