@@ -17,9 +17,9 @@ def main(args):
     data = ATSTDataModule(**dict_args)
     trainer:Trainer = Trainer(
                             strategy="ddp_find_unused_parameters_true",
-                            sync_batchnorm=True,
+                            devices=args.nproc, 
                             accelerator="gpu",
-                            devices=args.nproc,
+                            sync_batchnorm=True,
                             max_steps=args.max_steps,
                             logger=[logger_tb],#,logger_wb],
                             callbacks=[ModelCheckpoint(dirpath=args.save_path,

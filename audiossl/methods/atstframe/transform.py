@@ -12,7 +12,7 @@ import random_mask
 
     
 class FrameATSTTrainTransform:
-    def __init__(self,sr=16000,win_length=1024,aug_tea=True,aug_stu=True,freq_wrap=True,mask_ratio=0.75,mask_nooverlap=False,min_mask_len=2,mask_len=5,mask_type="random",anchor_len=6.,patch_h=64,patch_w=4,n_mels=64,**kwargs):
+    def __init__(self,sr=16000,win_length=1024,aug_tea=True,aug_stu=True,mix_up=True,freq_wrap=True,mask_ratio=0.75,mask_nooverlap=False,min_mask_len=2,mask_len=5,mask_type="random",anchor_len=6.,patch_h=64,patch_w=4,n_mels=64,**kwargs):
         melspec_t = torchaudio.transforms.MelSpectrogram(
             sr, f_min=60, f_max=7800, hop_length=160, win_length=win_length, n_fft=1024, n_mels=n_mels)
         to_db = torchaudio.transforms.AmplitudeToDB(stype="power",top_db=80)
@@ -48,7 +48,7 @@ class FrameATSTTrainTransform:
         if self.aug_tea:
             self.positive_transform1 = transforms.Compose(
                                     [
-                                    Mixup(),
+                                    Mixup() if mix_up else Identity(),
                                     RandomResizeCrop((1,1.0),time_scale=(1.0,1.0)) if freq_wrap else Identity(),
                                     ]
                                     )
@@ -58,7 +58,7 @@ class FrameATSTTrainTransform:
         if self.aug_stu:
             self.positive_transform2 = transforms.Compose(
                                 [
-                                Mixup(),
+                                Mixup() if mix_up else Identity(),
                                 RandomResizeCrop((1,1.0),time_scale=(1.0,1.0)) if freq_wrap else Identity(),
                                 ]
                                 )

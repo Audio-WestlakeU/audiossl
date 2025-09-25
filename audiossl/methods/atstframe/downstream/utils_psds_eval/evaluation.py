@@ -214,8 +214,7 @@ def compute_psds_one_item(psds_eval: PSDSEval,prediction_dfs,i,k, weighted=False
     det["index"] = range(1, len(det) + 1)
     det = det.set_index("index")
     psds_args = psds_eval.add_operating_point_single_thread(
-        det, info={"name": f"Op {i + 1:02d}", "threshold": k}, weighted=weighted
-    )
+        det, info={"name": f"Op {i + 1:02d}", "threshold": k})
     return psds_args
 
 def compute_psds_from_operating_points(
@@ -278,11 +277,11 @@ def compute_psds_from_operating_points(
             det["index"] = range(1, len(det) + 1)
             det = det.set_index("index")
             psds_args = psds_eval.add_operating_point_single_thread(
-                det, info={"name": f"Op {i + 1:02d}", "threshold": k}, weighted=weighted
+                det, info={"name": f"Op {i + 1:02d}", "threshold": k}
             )
             if psds_args is not None:
                 psds_eval._add_op(**psds_args)
-    psds_score = psds_eval.psds(alpha_ct=alpha_ct, alpha_st=alpha_st, max_efpr=max_efpr, weighted=weighted)
+    psds_score = psds_eval.psds(alpha_ct=alpha_ct, alpha_st=alpha_st, max_efpr=max_efpr )
 
 
     if save_dir is not None:

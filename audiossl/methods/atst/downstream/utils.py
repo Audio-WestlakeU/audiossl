@@ -160,7 +160,7 @@ class Metric:
         preds = torch.cat(preds)
         targets = torch.cat(targets)
         print(preds.shape,targets.shape)
-        preds = preds.cpu().numpy()
+        preds = preds.float().cpu().numpy()
         targets = targets.cpu().numpy()
         if self.mode == "mAP":
             mAPs =[]

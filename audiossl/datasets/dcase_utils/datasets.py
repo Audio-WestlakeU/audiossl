@@ -60,7 +60,14 @@ def process_labels(df, onset, offset):
 
 def read_audio(file, multisrc, random_channel, pad_to):
     
-    mixture, fs = torchaudio.load(file)
+    try:
+        mixture, fs = torchaudio.load(file)
+    except:
+
+        print("====================",file,"=====================")
+        mixture = torch.zeros(1,16000)
+        fs = 16000
+
     
     if not multisrc:
         mixture = to_mono(mixture, random_channel)

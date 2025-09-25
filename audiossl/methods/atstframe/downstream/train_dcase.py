@@ -85,9 +85,8 @@ def run(args, pretrained_module):
             )
 
     trainer: Trainer = Trainer(
-        strategy=None,
+        strategy="auto",
         sync_batchnorm=True,
-        accelerator="gpu",
         devices=args.nproc,
         gradient_clip_val=3.0,
         max_epochs=args.max_epochs,

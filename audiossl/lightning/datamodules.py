@@ -92,10 +92,11 @@ class DistributedSamplerWrapper(DistributedSampler):
         self.sampler = sampler
 
     def __iter__(self):
-        if self.sampler.generator is None:
-            self.sampler.generator = torch.Generator()
-        self.sampler.generator.manual_seed(self.seed + self.epoch)
+        g = torch.Generator()
+        g.manual_seed(self.seed + self.epoch)
+        self.sampler.generator = g
         indices = list(self.sampler)
+        self.sampler.generator = None # compatible for saving
         if self.epoch == 0:
             print(f"\n DistributedSamplerWrapper :  {indices[:10]} \n\n")
         indices = indices[self.rank:self.total_size:self.num_replicas]
@@ -233,8 +234,8 @@ class DownstreamDataModule(LightningDataModule):
                 self.dataset_train,
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
-                shuffle=self.shuffle,
-                sampler=None,
+                shuffle=self.shuffle if self.sampler is None else False,
+                sampler=self.sampler,
                 drop_last=False,
                 collate_fn=self.collate_fn,
                 pin_memory=True

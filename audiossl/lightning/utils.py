@@ -8,7 +8,8 @@ from pytorch_lightning import LightningDataModule,LightningModule
 class EmbeddingExtractor:
     def __init__(self,
                  module:LightningModule,
-                 nproc:int=1
+                 nproc:int=1,
+                 precision:str="bf16-mixed"
                 ):
         self.trainer = Trainer(
                             strategy="ddp_find_unused_parameters_false",
@@ -16,6 +17,7 @@ class EmbeddingExtractor:
                             logger=False,
                             accelerator="gpu",
                             devices=nproc,
+                            precision=precision,
                             #profiler="simple",
                             #max_epochs=1,
                             )

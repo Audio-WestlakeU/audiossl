@@ -227,6 +227,8 @@ class ManyHotEncoder:
             offset_timestamps = (offset_index[:, 1] + 1) * self.net_pooling / (self.fs / self.frame_hop)     # plus one to meet original ManyHotEncoder setups
             thd_filename_cls = thd_filename_cls[event_index.cpu().numpy()]
             thds_all = [float(x.split(" ")[0]) for x in thd_filename_cls]
+            #print("thds_all:",thds_all)
+            #print("========================")
             filename_all = [x.split(" ")[1] for x in thd_filename_cls]
             cls_all = [x.split(" ")[2] for x in thd_filename_cls]
             onset_timestamps = onset_timestamps.cpu().numpy()
@@ -242,7 +244,10 @@ class ManyHotEncoder:
                 }
             )
             
-            return_dict = {k: g.iloc[:, 1:] for k, g in df.groupby(["thd"])}
+            return_dict = {k: g.iloc[:, 1:] for k, g in df.groupby("thd")}
+            #print(df.groupby(["thd"]))
+            #print("retrun keys",return_dict.keys())
+            #print("=======================")
             # Recheck thresholds
             empty_thds = [thd for thd in thds if thd not in return_dict.keys()]
             for t in empty_thds:

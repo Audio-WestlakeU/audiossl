@@ -114,14 +114,14 @@ class FineTuningPLModule(LightningModule):
         )
         # for weak labels we simply compute f1 score
         self.get_weak_student_f1_seg_macro = tm.F1Score(
-            num_classes=len(self.pred_decoder.labels),
+            num_labels=len(self.pred_decoder.labels),
             average="macro",
-            compute_on_step=False,
-            multiclass=True
+            task="multilabel"
         )
 
         # buffer for event based scores which we compute using sed-eval
         self.median_filter = MedianPool2d(self.config["training"]["median_window"], same=True)
+        self.median_filter = MedianPool2d(3, same=True)
         self.sed_metrics_student = SEDMetrics(intersection_thd=0.5)
 
         
@@ -262,7 +262,7 @@ class FineTuningPLModule(LightningModule):
             median_filter=self.config["training"]["median_window"],
             thresholds=[0.5],
         )
-        self.decoded_05_buffer = self.decoded_05_buffer.append(decoded_strong[0.5])
+        self.decoded_05_buffer = pd.concat([decoded_strong[0.5],self.decoded_05_buffer])
         return
 
     def on_test_epoch_end(self) -> None:

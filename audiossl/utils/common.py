@@ -38,17 +38,33 @@ def cosine_scheduler_step(base_value, final_value, max_steps, warmup_steps=0, st
     assert len(schedule) == max_steps
     return schedule
 
-def get_params_groups(model):
+def get_params_groups(model,no_weight_decay_attr:list=[],debug=False):
+    def has_any_attr(p,attrs):
+        assert isinstance(attrs,list) 
+        for attr in attrs:
+            if getattr(p,attr,False):
+                return True
+        return False
+
     regularized = []
     not_regularized = []
+    if debug:
+        regularized_names = []
+        not_regularized_names = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
         # we do not regularize biases nor Norm parameters
-        if name.endswith(".bias") or len(param.shape) == 1:
+        if name.endswith(".bias") or len(param.shape) == 1 or has_any_attr(param,no_weight_decay_attr):
             not_regularized.append(param)
+            if debug:
+                not_regularized_names.append(name)
         else:
             regularized.append(param)
+            if debug:
+                regularized_names.append(name)
+    if debug:
+        return regularized_names,not_regularized_names
     return [{'params': regularized}, {'params': not_regularized, 'weight_decay': 0.}]
 def bool_flag(s):
     """
